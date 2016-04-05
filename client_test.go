@@ -54,3 +54,44 @@ func TestConnectionOk(t *testing.T) {
 	assert.NoError(t, err, "did not expect a connection error ")
 	client.Disconnect()
 }
+
+func TestConnectionNotOkBadAuth(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
+	opts := ClientOpts{
+		HostAndPort: INTEGRATION_SERVER,
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "badpass",
+		Version:     "1.1",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	fmt.Println("after connect in test")
+	assert.NoError(t, err, "did not expect a connection error ")
+	client.Disconnect()
+}
+
+
+func TestConnectionNotOkBadHost(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
+	opts := ClientOpts{
+		HostAndPort: "localhost",
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "badpass",
+		Version:     "1.1",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	fmt.Println("after connect in test")
+	assert.Error(t, err, "expected a connection error ")
+	client.Disconnect()
+}
+
+
