@@ -74,7 +74,6 @@ func TestConnectionNotOkBadAuth(t *testing.T) {
 	client.Disconnect()
 }
 
-
 func TestConnectionNotOkBadHost(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
@@ -94,4 +93,21 @@ func TestConnectionNotOkBadHost(t *testing.T) {
 	client.Disconnect()
 }
 
+func TestBasicSend(t *testing.T){
+	opts := ClientOpts{
+		HostAndPort: INTEGRATION_SERVER,
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "admin",
+		Version:     "1.1",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	assert.NoError(t, err, "did not expect a connection error ")
+	//defer client.Disconnect()
+	err = client.Send([]byte(`{"test":"test"}`),"/test/test","application/json",HEADERS{})
+	assert.NoError(t, err, "did not expect a connection error ")
+	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
 
+}

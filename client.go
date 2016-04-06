@@ -7,12 +7,12 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"time"
-	"sync"
 	"strings"
+	"sync"
+	"time"
 )
 
-const _ErrorDisconect string = "disconnected unexpectedly"
+const _ErrorDisconnect string = "disconnected unexpectedly"
 const _ServerError string = "server error "
 
 var (
@@ -40,13 +40,19 @@ type ClientOpts struct {
 
 type ConnectionError string
 type ServerError string
+type BadFrameError string
+type SubscriptionHandler func(Frame)
 
-func (ce ConnectionError) Error()string {
-	return _ErrorDisconect + " : " + string(ce)
+func (ce ConnectionError) Error() string {
+	return _ErrorDisconnect + " : " + string(ce)
 }
 
-func (ce ServerError) Error()string {
+func (ce ServerError) Error() string {
 	return _ServerError + " : " + string(ce)
+}
+
+func (be BadFrameError) Error() string {
+	return "bad frame recieved from server : " + string(be)
 }
 
 //the disconnect handler is called on disconnect error from the network. It should handle trying to reconnect
@@ -60,10 +66,11 @@ type StompConnector interface {
 }
 
 type StompSubscriber interface {
+	Subscribe(string, SubscriptionHandler, HEADERS)
 }
 
 type StompPublisher interface {
-	Send([]byte, string, string, HEADERS)error
+	Send([]byte, string, string, HEADERS) error
 }
 
 //a stomp client is all of these things
@@ -75,14 +82,15 @@ type StompClient interface {
 
 type Client struct {
 	opts             ClientOpts
-	connectionErr    chan error
+	connectionErr    chan error //we send an error on this channel if there is a connection error
+	shutdown	 chan bool  // tell any loops to etc for example the readLoop
+	writeChannel     chan Frame // send things to the frame write to write to the server
+	readChannel      chan Frame
 	ReconnectHandler DisconnectHandler
 	conn             net.Conn
 	writer           *bufio.Writer
 	reader           *bufio.Reader
-	writeChannel     chan Frame
-	readChannel      chan Frame
-	connectionLock	 sync.Mutex // protects the client state when connecting
+	connectionLock   sync.Mutex // protects the client state when connecting
 	_connecting      bool
 }
 
@@ -90,7 +98,8 @@ func NewClient(opts ClientOpts) StompClient {
 	errChan := make(chan error)
 	writeChan := make(chan Frame)
 	readChan := make(chan Frame)
-	return &Client{opts: opts, connectionErr: errChan,writeChannel:writeChan,readChannel:readChan}
+	shutdown := make(chan bool, 1)
+	return &Client{opts: opts, connectionErr: errChan, writeChannel: writeChan, readChannel: readChan,shutdown:shutdown}
 }
 
 //StompConnector.Connect creates a tcp connection. sends any error through the errChan
@@ -117,26 +126,45 @@ func (client *Client) Connect() error {
 	if err != nil {
 		return ConnectionError(err.Error())
 	}
-	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF,client.connectionErr)
-	client.writeFrame(connectFrame)
-	//b, e := client.reader.ReadBytes(0)
-	//if e != nil {
-	//	fmt.Println("returned from connect ", string(b))
-	//	return e
-	//}
-	fmt.Println("reading after connect")
-	f,err := client.readFrame()
-	if err != nil{
+	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF, client.connectionErr)
+	if err := client.writeFrame(connectFrame); err != nil{
+		client.sendConnectionError(err)
 		return err
 	}
-	fmt.Print("read frame ",f)
+
+	//read frame after writing out connection to check we are connected
+	if _, err = client.readFrame(); err != nil {
+		client.sendConnectionError(err)
+		return err
+	}
+	go client.readLoop()
 	return nil
 
 }
 
+func (client *Client)sendConnectionError(err error){
+	if _,is := err.(ConnectionError); is{
+		select {
+		case client.connectionErr <- err:
+		default:
+		}
+	}
+}
+
 //StompConnector.Disconnect close our error channel then close the socket connection
 func (client *Client) Disconnect() error {
+	//signal read loop to shutdown
+	fmt.Println("disconnect called")
+	select {
+	case client.shutdown <- true:
+	default:
+
+	}
 	close(client.connectionErr)
+	close(client.readChannel)
+	close(client.writeChannel)
+	close(client.shutdown)
+
 	if nil != client.conn {
 		return client.conn.Close()
 	}
@@ -153,7 +181,7 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) error
 		//todo could end up with multiple handlers
 		//todo prob dont want to fire this multiple times between disconnects. Likely needs more sophistication
 		for err := range errChan {
-			if _,ok := err.(ConnectionError); ok {
+			if _, ok := err.(ConnectionError); ok {
 				client.ReconnectHandler(err)
 			}
 		}
@@ -162,31 +190,40 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) error
 }
 
 //StompPublisher.Send send a message to the server
-func (client *Client)Send(body []byte, destination, contentType string, addedHeaders HEADERS)error{
-	headers:= sendHeaders(destination,contentType,addedHeaders)
-	frame := NewFrame(_COMMAND_SEND,headers,body,client.connectionErr)
-	client.writeChannel <-frame
-	return nil
+func (client *Client) Send(body []byte, destination, contentType string, addedHeaders HEADERS) error {
+	headers := sendHeaders(destination, contentType, addedHeaders)
+	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
+	//client.writeChannel <- frame
+	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
+	return client.writeFrame(frame)
 }
 
+//subscribe to messages sent to the destination.
+//headers are id and ack
+func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers HEADERS)  {
+	//create an id
+	//register  subscriber for destination
+}
 
-func (client *Client) writeFrame(frame Frame)error {
+func (client *Client) writeFrame(frame Frame) error {
+
 	frame.Headers["content-length"] = strconv.Itoa(len(frame.Body))
 	if _, err := client.writer.Write(frame.Command); err != nil {
-		return err
+		//treating failure to write to the socket as a network error
+		return ConnectionError(err.Error())
 	}
-
+	fmt.Println("writing frame ",frame)
 	for k, v := range frame.Headers {
 		val := k + ":" + v + "\n"
 		if _, err := client.writer.WriteString(val); err != nil {
 			return err
 		}
 	}
-	if err := client.writer.WriteByte('\n'); err != nil{
+	if err := client.writer.WriteByte('\n'); err != nil {
 		return err
 	}
 	if len(frame.Body) > 0 {
-		if _,err := client.writer.Write(frame.Body); err != nil{
+		if _, err := client.writer.Write(frame.Body); err != nil {
 			return err
 		}
 	}
@@ -204,72 +241,73 @@ func (client *Client) writeFrame(frame Frame)error {
 }
 
 //reads a single frame of the wire
-func (client *Client) readFrame()(Frame,error){
+func (client *Client) readFrame() (Frame, error) {
 	f := Frame{}
 	line, err := client.reader.ReadBytes('\n')
-	//count this as a connection error
+	//count this as a connection error. will be sent via error channel to the reconnect handler
 	if err != nil {
-		return f,ConnectionError(err.Error())
+		return f, ConnectionError(err.Error())
 	}
-	fmt.Println("read line ", string(line))
 	f.Command = line
-
+	//sort out our headers
 	f.Headers = make(map[string]string)
-	for{
+	for {
 		header, err := client.reader.ReadString('\n')
-		if nil != err{
-			fmt.Println("error reading headers ",err,header)
-			return f,err
+		if nil != err {
+			return f, err
 		}
-		if header == "\n"{
-			//reached end of headers break
+		if header == "\n" {
+			//reached end of headers break should we set some short deadlock break?
 			break
 		}
-		parsed := strings.SplitN(header,":",2)
-		if len(parsed) !=2{
-			//this is an error handle
-			fmt.Println("error ", parsed)
+		parsed := strings.SplitN(header, ":", 2)
+		if len(parsed) != 2 {
+			return f, BadFrameError("failed to parse header correctly " + header)
 		}
 		//todo need to decode the headers
 		f.Headers[parsed[0]] = parsed[1]
-
-
-		fmt.Println(header)
-
 	}
-	//read headers
-	//line, err = client.reader.ReadString('\n')
-	//if err != nil {
-	//	return f,err
-	//}
-	//fmt.Println("read line ", line)
 	//ready body
-	body,err := client.reader.ReadBytes('\n')
+	body, err := client.reader.ReadBytes('\n')
 	if err != nil {
-		return f,ConnectionError(err.Error())
+		return f, err
 	}
-	fmt.Println("body of message ", string(body))
-	//if we are connecting and there was an error let the client know
-	if client._connecting{
-		if string(f.Command) == "ERROR\n"{
-			//look for a message header to get more info
-			return f, ServerError("error during initial connection " + f.Headers["message"])
-			fmt.Println("error returned from server")
+	f.Body = body[0:len(body) -1]
+
+	if string(f.Command) == "ERROR\n" {
+		if client._connecting {
+			return f, ServerError("error returned from server during initial connection. " + f.Headers["message"])
 		}
+		return f, ServerError("error returned from server: " + f.Headers["message"])
 	}
-	return f,nil
+	return f, nil
 }
 
-func (client *Client) readLoop(){
-
-}
-
-
-func (client *Client)writeLoop(){
-
-	for{
+func (client *Client) readLoop() {
+	//read a frame, if it is a subscription send it be handled
+	for {
 		select {
-		case f := <- client.writeChannel:
+		case <- client.shutdown:
+			return
+		default:
+			fmt.Println("reading next frame")
+			frame,err := client.readFrame()
+			fmt.Println(frame,err)
+			if err != nil{
+				client.connectionErr <- ConnectionError("failed when reading frame " + err.Error())
+			}
+			fmt.Println("recieved frame in readLoop ",frame)
+		}
+
+	}
+
+}
+
+func (client *Client) writeLoop() {
+
+	for {
+		select {
+		case f := <-client.writeChannel:
 			client.writeFrame(f)
 		}
 	}

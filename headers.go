@@ -28,14 +28,14 @@ func connectionHeaders(opts ClientOpts) (HEADERS, error) {
 	return headers, nil
 }
 
-func sendHeaders(dest , contentType string, addedHeaders HEADERS)HEADERS{
+func sendHeaders(dest, contentType string, addedHeaders HEADERS) HEADERS {
 	headers := HEADERS{}
 	headers["content-type"] = contentType
 	headers["destination"] = dest
-	if nil == addedHeaders{
+	if nil == addedHeaders {
 		return headers
 	}
-	for k,v := range addedHeaders{
+	for k, v := range addedHeaders {
 		headers[k] = v
 	}
 	return headers
