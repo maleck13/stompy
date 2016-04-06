@@ -83,7 +83,7 @@ type StompClient interface {
 type Client struct {
 	opts             ClientOpts
 	connectionErr    chan error //we send an error on this channel if there is a connection error
-	shutdown	 chan bool  // tell any loops to etc for example the readLoop
+	shutdown         chan bool  // tell any loops to etc for example the readLoop
 	writeChannel     chan Frame // send things to the frame write to write to the server
 	readChannel      chan Frame
 	ReconnectHandler DisconnectHandler
@@ -99,7 +99,7 @@ func NewClient(opts ClientOpts) StompClient {
 	writeChan := make(chan Frame)
 	readChan := make(chan Frame)
 	shutdown := make(chan bool, 1)
-	return &Client{opts: opts, connectionErr: errChan, writeChannel: writeChan, readChannel: readChan,shutdown:shutdown}
+	return &Client{opts: opts, connectionErr: errChan, writeChannel: writeChan, readChannel: readChan, shutdown: shutdown}
 }
 
 //StompConnector.Connect creates a tcp connection. sends any error through the errChan
@@ -127,7 +127,7 @@ func (client *Client) Connect() error {
 		return ConnectionError(err.Error())
 	}
 	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF, client.connectionErr)
-	if err := client.writeFrame(connectFrame); err != nil{
+	if err := client.writeFrame(connectFrame); err != nil {
 		client.sendConnectionError(err)
 		return err
 	}
@@ -142,8 +142,8 @@ func (client *Client) Connect() error {
 
 }
 
-func (client *Client)sendConnectionError(err error){
-	if _,is := err.(ConnectionError); is{
+func (client *Client) sendConnectionError(err error) {
+	if _, is := err.(ConnectionError); is {
 		select {
 		case client.connectionErr <- err:
 		default:
@@ -200,7 +200,7 @@ func (client *Client) Send(body []byte, destination, contentType string, addedHe
 
 //subscribe to messages sent to the destination.
 //headers are id and ack
-func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers HEADERS)  {
+func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers HEADERS) {
 	//create an id
 	//register  subscriber for destination
 }
@@ -212,7 +212,7 @@ func (client *Client) writeFrame(frame Frame) error {
 		//treating failure to write to the socket as a network error
 		return ConnectionError(err.Error())
 	}
-	fmt.Println("writing frame ",frame)
+	fmt.Println("writing frame ", frame)
 	for k, v := range frame.Headers {
 		val := k + ":" + v + "\n"
 		if _, err := client.writer.WriteString(val); err != nil {
@@ -272,7 +272,7 @@ func (client *Client) readFrame() (Frame, error) {
 	if err != nil {
 		return f, err
 	}
-	f.Body = body[0:len(body) -1]
+	f.Body = body[0 : len(body)-1]
 
 	if string(f.Command) == "ERROR\n" {
 		if client._connecting {
@@ -287,16 +287,16 @@ func (client *Client) readLoop() {
 	//read a frame, if it is a subscription send it be handled
 	for {
 		select {
-		case <- client.shutdown:
+		case <-client.shutdown:
 			return
 		default:
 			fmt.Println("reading next frame")
-			frame,err := client.readFrame()
-			fmt.Println(frame,err)
-			if err != nil{
+			frame, err := client.readFrame()
+			fmt.Println(frame, err)
+			if err != nil {
 				client.connectionErr <- ConnectionError("failed when reading frame " + err.Error())
 			}
-			fmt.Println("recieved frame in readLoop ",frame)
+			fmt.Println("recieved frame in readLoop ", frame)
 		}
 
 	}

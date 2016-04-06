@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 )
 
 var (
@@ -93,7 +93,7 @@ func TestConnectionNotOkBadHost(t *testing.T) {
 	client.Disconnect()
 }
 
-func TestBasicSend(t *testing.T){
+func TestBasicSend(t *testing.T) {
 	opts := ClientOpts{
 		HostAndPort: INTEGRATION_SERVER,
 		Timeout:     20 * time.Second,
@@ -106,7 +106,7 @@ func TestBasicSend(t *testing.T){
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
 	//defer client.Disconnect()
-	err = client.Send([]byte(`{"test":"test"}`),"/test/test","application/json",HEADERS{})
+	err = client.Send([]byte(`{"test":"test"}`), "/test/test", "application/json", HEADERS{})
 	assert.NoError(t, err, "did not expect a connection error ")
 	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
 
