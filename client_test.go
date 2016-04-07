@@ -94,6 +94,9 @@ func TestConnectionNotOkBadHost(t *testing.T) {
 }
 
 func TestBasicSend(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
 	opts := ClientOpts{
 		HostAndPort: INTEGRATION_SERVER,
 		Timeout:     20 * time.Second,
@@ -110,4 +113,28 @@ func TestBasicSend(t *testing.T) {
 	assert.NoError(t, err, "did not expect a connection error ")
 	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
 
+}
+
+func TestClient_Subscribe(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
+	opts := ClientOpts{
+		HostAndPort: INTEGRATION_SERVER,
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "admin",
+		Version:     "1.1",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	assert.NoError(t, err, "did not expect a connection error ")
+	err = client.Subscribe("/test/test",func(f Frame){
+		  fmt.Println("recieved message")
+	},HEADERS{})
+
+	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
+
+	assert.NoError(t,err,"did not expect an error subscribing ")
 }

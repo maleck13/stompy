@@ -40,3 +40,11 @@ func sendHeaders(dest, contentType string, addedHeaders HEADERS) HEADERS {
 	}
 	return headers
 }
+
+
+func subscribeHeaders(id,dest string )HEADERS{
+   	headers := HEADERS{}
+   	headers["id"] = id
+	headers["destination"] = dest
+	return headers
+}
