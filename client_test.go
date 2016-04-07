@@ -109,7 +109,7 @@ func TestBasicSend(t *testing.T) {
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
 	//defer client.Disconnect()
-	err = client.Send([]byte(`{"test":"test"}`), "/test/test", "application/json", HEADERS{})
+	err = client.Publish([]byte(`{"test":"test"}`), "/test/test", "application/json", HEADERS{})
 	assert.NoError(t, err, "did not expect a connection error ")
 	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
 
@@ -131,10 +131,13 @@ func TestClient_Subscribe(t *testing.T) {
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
 	err = client.Subscribe("/test/test", func(f Frame) {
-		fmt.Println("recieved message")
+		fmt.Println("recieved message ", string(f.Body))
 	}, HEADERS{})
-
-	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
-
 	assert.NoError(t, err, "did not expect an error subscribing ")
+	for i := 0; i < 20; i++ {
+		str := fmt.Sprintf("test %d ", i)
+		err = client.Publish([]byte(`{"test":"`+str+`"}`), "/test/test", "application/json", HEADERS{})
+	}
+	assert.NoError(t, err, "did not expect an error subscribing ")
+	time.Sleep(500 * time.Millisecond) //give it time to receive the channel msg
 }

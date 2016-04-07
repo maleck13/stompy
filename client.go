@@ -28,6 +28,7 @@ var (
 
 const (
 	STOMP_1_1 string = "1.1"
+	STOMP_1_2 string = "1.2"
 )
 
 //wraps up various connection and auth params
@@ -72,7 +73,7 @@ type StompSubscriber interface {
 }
 
 type StompPublisher interface {
-	Send([]byte, string, string, HEADERS) error
+	Publish([]byte, string, string, HEADERS) error
 }
 
 //a stomp client is all of these things
@@ -91,8 +92,6 @@ type Client struct {
 	opts             ClientOpts
 	connectionErr    chan error //we send an error on this channel if there is a connection error
 	shutdown         chan bool  // tell any loops to etc for example the readLoop
-	writeChannel     chan Frame // send things to the frame write to write to the server
-	readChannel      chan Frame
 	ReconnectHandler DisconnectHandler
 	conn             net.Conn
 	writer           *bufio.Writer
@@ -105,12 +104,10 @@ type Client struct {
 
 func NewClient(opts ClientOpts) StompClient {
 	errChan := make(chan error)
-	writeChan := make(chan Frame)
-	readChan := make(chan Frame)
 	shutdown := make(chan bool, 1)
 	subMap := make(map[string]SubscriptionHandler)
 	subs := &subscriptions{subs: subMap}
-	return &Client{opts: opts, connectionErr: errChan, writeChannel: writeChan, readChannel: readChan, shutdown: shutdown, subscriptions: subs}
+	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs}
 }
 
 //StompConnector.Connect creates a tcp connection. sends any error through the errChan
@@ -173,8 +170,6 @@ func (client *Client) Disconnect() error {
 
 	}
 	close(client.connectionErr)
-	close(client.readChannel)
-	close(client.writeChannel)
 	close(client.shutdown)
 
 	if nil != client.conn {
@@ -201,11 +196,10 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) error
 	return nil
 }
 
-//StompPublisher.Send send a message to the server
-func (client *Client) Send(body []byte, destination, contentType string, addedHeaders HEADERS) error {
+//StompPublisher.Send publish a message to the server
+func (client *Client) Publish(body []byte, destination, contentType string, addedHeaders HEADERS) error {
 	headers := sendHeaders(destination, contentType, addedHeaders)
 	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
-	//client.writeChannel <- frame
 	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
 	return client.writeFrame(frame)
 }
@@ -267,8 +261,6 @@ func (client *Client) writeFrame(frame Frame) error {
 //reads a single frame of the wire
 func (client *Client) readFrame() (Frame, error) {
 	f := Frame{}
-	b, err := client.reader.ReadByte()
-	fmt.Println("read byte ", b, err)
 	line, err := client.reader.ReadBytes('\n')
 	//count this as a connection error. will be sent via error channel to the reconnect handler
 	if err != nil {
@@ -291,7 +283,7 @@ func (client *Client) readFrame() (Frame, error) {
 			return f, BadFrameError("failed to parse header correctly " + header)
 		}
 		//todo need to decode the headers
-		f.Headers[parsed[0]] = parsed[1]
+		f.Headers[strings.TrimSpace(parsed[0])] = strings.TrimSpace(parsed[1])
 	}
 	//ready body
 	body, err := client.reader.ReadBytes('\n')
@@ -316,26 +308,29 @@ func (client *Client) readLoop() {
 		case <-client.shutdown:
 			return
 		default:
-			fmt.Println("reading next frame")
-			frame, err := client.readFrame()
-			fmt.Println(frame, err)
+			frame, err := client.readFrame() //this will block until it reads
 			if err != nil {
 				client.connectionErr <- ConnectionError("failed when reading frame " + err.Error())
 			}
-			fmt.Println("recieved frame in readLoop ", frame)
+			go func(f Frame) {
+				//coming from the server it will be one of
+				/*
+					"CONNECTED"
+					"MESSAGE"
+					"RECEIPT"
+					"ERROR"
+				 */
+				cmd := string(f.Command)
+				fmt.Println(f.Headers)
+				if sub, ok := f.Headers["subscription"]; ok {
+					if _, hasSub := client.subscriptions.subs[sub]; hasSub {
+						client.subscriptions.subs[sub](f)
+					}
+				}
+				fmt.Println("command read ", cmd)
+			}(frame)
 		}
 
-	}
-
-}
-
-func (client *Client) writeLoop() {
-
-	for {
-		select {
-		case f := <-client.writeChannel:
-			client.writeFrame(f)
-		}
 	}
 
 }
