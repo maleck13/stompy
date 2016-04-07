@@ -319,7 +319,7 @@ func (client *Client) readLoop() {
 					"MESSAGE"
 					"RECEIPT"
 					"ERROR"
-				 */
+				*/
 				cmd := string(f.Command)
 				fmt.Println(f.Headers)
 				if sub, ok := f.Headers["subscription"]; ok {
