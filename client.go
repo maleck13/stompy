@@ -98,7 +98,6 @@ type Client struct {
 	reader           *bufio.Reader
 	connectionLock   sync.Mutex // protects the client state when connecting
 	_connecting      bool
-	subLock          sync.Mutex
 	subscriptions    *subscriptions
 }
 
