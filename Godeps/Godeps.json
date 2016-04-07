@@ -2,12 +2,16 @@
 	"ImportPath": "github.com/maleck13/stompy",
 	"GoVersion": "go1.6",
 	"Packages": [
-		"."
+		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",
 			"Rev": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d"
+		},
+		{
+			"ImportPath": "github.com/nu7hatch/gouuid",
+			"Rev": "179d4d0c4d8d407a32af483c2354df1d2c91e6c3"
 		},
 		{
 			"ImportPath": "github.com/pmezard/go-difflib/difflib",

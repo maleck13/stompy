@@ -130,11 +130,11 @@ func TestClient_Subscribe(t *testing.T) {
 	client := NewClient(opts)
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
-	err = client.Subscribe("/test/test",func(f Frame){
-		  fmt.Println("recieved message")
-	},HEADERS{})
+	err = client.Subscribe("/test/test", func(f Frame) {
+		fmt.Println("recieved message")
+	}, HEADERS{})
 
 	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
 
-	assert.NoError(t,err,"did not expect an error subscribing ")
+	assert.NoError(t, err, "did not expect an error subscribing ")
 }

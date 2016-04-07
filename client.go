@@ -10,7 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"github.com/nu7hatch/gouuid"
+
+	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/nu7hatch/gouuid"
 )
 
 const _ErrorDisconnect string = "disconnected unexpectedly"
@@ -67,7 +68,7 @@ type StompConnector interface {
 }
 
 type StompSubscriber interface {
-	Subscribe(string, SubscriptionHandler, HEADERS)error
+	Subscribe(string, SubscriptionHandler, HEADERS) error
 }
 
 type StompPublisher interface {
@@ -98,7 +99,7 @@ type Client struct {
 	reader           *bufio.Reader
 	connectionLock   sync.Mutex // protects the client state when connecting
 	_connecting      bool
-	subLock		 sync.Mutex
+	subLock          sync.Mutex
 	subscriptions    *subscriptions
 }
 
@@ -108,8 +109,8 @@ func NewClient(opts ClientOpts) StompClient {
 	readChan := make(chan Frame)
 	shutdown := make(chan bool, 1)
 	subMap := make(map[string]SubscriptionHandler)
-	subs := &subscriptions{subs:subMap}
-	return &Client{opts: opts, connectionErr: errChan, writeChannel: writeChan, readChannel: readChan, shutdown: shutdown,subscriptions:subs}
+	subs := &subscriptions{subs: subMap}
+	return &Client{opts: opts, connectionErr: errChan, writeChannel: writeChan, readChannel: readChan, shutdown: shutdown, subscriptions: subs}
 }
 
 //StompConnector.Connect creates a tcp connection. sends any error through the errChan
@@ -211,21 +212,21 @@ func (client *Client) Send(body []byte, destination, contentType string, addedHe
 
 //subscribe to messages sent to the destination.
 //headers are id and ack
-func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers HEADERS) error{
+func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers HEADERS) error {
 	//create an id
-	id,err :=uuid.NewV4()
-	if nil != err{
+	id, err := uuid.NewV4()
+	if nil != err {
 		return err
 	}
 	client.subscriptions.Lock()
 	defer client.subscriptions.Unlock()
 	client.subscriptions.subs[id.String()] = handler
-	subHeaders:= subscribeHeaders(id.String(),destination)
-	frame := Frame{_COMMAND_SUBSCRIBE,subHeaders,_NULLBUFF,client.connectionErr}
-	if err := client.writeFrame(frame); err != nil{
+	subHeaders := subscribeHeaders(id.String(), destination)
+	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF, client.connectionErr}
+	if err := client.writeFrame(frame); err != nil {
 		return err
 	}
-	return nil;
+	return nil
 }
 
 func (client *Client) writeFrame(frame Frame) error {
@@ -266,8 +267,8 @@ func (client *Client) writeFrame(frame Frame) error {
 //reads a single frame of the wire
 func (client *Client) readFrame() (Frame, error) {
 	f := Frame{}
-	b,err := client.reader.ReadByte()
-	fmt.Println("read byte ", b,err)
+	b, err := client.reader.ReadByte()
+	fmt.Println("read byte ", b, err)
 	line, err := client.reader.ReadBytes('\n')
 	//count this as a connection error. will be sent via error channel to the reconnect handler
 	if err != nil {
