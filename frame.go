@@ -14,17 +14,15 @@ var (
 
 //stomp frame is made up of a command, headers and body. The err channel is for communicating back to the client on connection error
 type Frame struct {
-	Command   []byte
-	Headers   map[string]string
-	Body      []byte
-	errorChan chan error
+	Command []byte
+	Headers map[string]string
+	Body    []byte
 }
 
 func NewFrame(command []byte, headers HEADERS, body []byte, errChan chan error) Frame {
 	return Frame{
-		Command:   command,
-		Headers:   headers,
-		Body:      body,
-		errorChan: errChan,
+		Command: command,
+		Headers: headers,
+		Body:    body,
 	}
 }

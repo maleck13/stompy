@@ -23,11 +23,10 @@ func TestConnectionError(t *testing.T) {
 	}
 	client := NewClient(opts)
 	errorReceived := false
-	err := client.RegisterDisconnectHandler(func(err error) {
+	client.RegisterDisconnectHandler(func(err error) {
 		fmt.Println("recieved disconnect err ", err)
 		errorReceived = true
 	})
-	assert.NoError(t, err, "did not expect an error registering disconnect handler")
 	if err := client.Connect(); err != nil {
 		assert.Error(t, err, "expected a connection error")
 	}

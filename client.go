@@ -2,11 +2,9 @@ package stompy
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,21 +12,17 @@ import (
 	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/nu7hatch/gouuid"
 )
 
-const _ErrorDisconnect string = "disconnected unexpectedly"
-const _ServerError string = "server error "
-
-var (
-	ErrDisconnected                 error = errors.New("client disconnected unexpectedly")
-	ErrPostConnectDisconnectHandler error = errors.New("a disconnect handler should be registered before calling connect")
-	DefaultDisconnectHandler              = func(err error) {
-		//hmmm what to do
-		log.Println("defualt disconnect handler: ", err)
-	}
-)
-
 const (
 	STOMP_1_1 string = "1.1"
 	STOMP_1_2 string = "1.2"
+)
+
+var (
+	Supported                = []string{STOMP_1_1, STOMP_1_2}
+	DefaultDisconnectHandler = func(err error) {
+		//hmmm what to do
+		log.Println("defualt disconnect handler: ", err)
+	}
 )
 
 //wraps up various connection and auth params
@@ -41,64 +35,56 @@ type ClientOpts struct {
 	Version     string
 }
 
-type ConnectionError string
-type ServerError string
-type BadFrameError string
+//the subscription handler type defines the function signature that should be passed when subscribing to queues
 type SubscriptionHandler func(Frame)
-
-func (ce ConnectionError) Error() string {
-	return _ErrorDisconnect + " : " + string(ce)
-}
-
-func (ce ServerError) Error() string {
-	return _ServerError + " : " + string(ce)
-}
-
-func (be BadFrameError) Error() string {
-	return "bad frame recieved from server : " + string(be)
-}
 
 //the disconnect handler is called on disconnect error from the network. It should handle trying to reconnect
 //and set up the subscribers again
 type DisconnectHandler func(error)
 
+//responsible for defining the how the connection to the server should be handled
 type StompConnector interface {
 	Connect() error
 	Disconnect() error
-	RegisterDisconnectHandler(DisconnectHandler) error
+	RegisterDisconnectHandler(DisconnectHandler)
 }
 
+//responsible for defining how a subscription should be handled
 type StompSubscriber interface {
+	//accepts a destination /test/test for example a handler function for handling messages from that subscription and any headers you want to override / set
 	Subscribe(string, SubscriptionHandler, HEADERS) error
 }
 
+//responsible for defining how a publish should happen
 type StompPublisher interface {
+	//accepts a body, destination, content-type and any headers you wish to override or set
 	Publish([]byte, string, string, HEADERS) error
 }
 
-//a stomp client is all of these things
+//A stomp client is a combination of all of these things
 type StompClient interface {
 	StompConnector
 	StompSubscriber
 	StompPublisher
 }
 
+//lockable struct for mapping subscription ids to their handlers
 type subscriptions struct {
 	sync.Mutex
 	subs map[string]SubscriptionHandler
 }
 
 type Client struct {
-	opts             ClientOpts
-	connectionErr    chan error //we send an error on this channel if there is a connection error
-	shutdown         chan bool  // tell any loops to etc for example the readLoop
-	ReconnectHandler DisconnectHandler
-	conn             net.Conn
-	writer           *bufio.Writer
-	reader           *bufio.Reader
-	connectionLock   sync.Mutex // protects the client state when connecting
-	_connecting      bool
-	subscriptions    *subscriptions
+	opts              ClientOpts
+	connectionErr     chan error        //we send an error on this channel if there is a connection error. the DisconnectHandler is called if this channel receives an error
+	shutdown          chan bool         // tell any loops to exit as we are disconnecting. For example the readLoop
+	DisconnectHandler DisconnectHandler // a func that should do something in the case of a network disconnection
+	conn              net.Conn
+	writer            *bufio.Writer //used to write to the network socket
+	reader            *bufio.Reader //used to read from the network socket
+	connectionLock    sync.Mutex    // protects the client state while connecting
+	_connecting       bool          //flag for to let the client handle actions performed before connection is established
+	subscriptions     *subscriptions
 }
 
 func NewClient(opts ClientOpts) StompClient {
@@ -109,19 +95,21 @@ func NewClient(opts ClientOpts) StompClient {
 	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs}
 }
 
-//StompConnector.Connect creates a tcp connection. sends any error through the errChan
+//StompConnector.Connect creates a tcp connection. sends any error through the errChan also returns the error
 func (client *Client) Connect() error {
+	//make sure other methods understand that we are currently connecting
 	client.connectionLock.Lock()
 	defer client.connectionLock.Unlock()
 	client._connecting = true
 	//set up default disconnect handler that just logs out the err
-	if client.ReconnectHandler == nil {
+	if client.DisconnectHandler == nil {
 		client.RegisterDisconnectHandler(DefaultDisconnectHandler)
 	}
 	conn, err := net.DialTimeout("tcp", client.opts.HostAndPort, client.opts.Timeout)
 	if err != nil {
-		client.connectionErr <- ConnectionError(err.Error())
-		return ErrDisconnected
+		connErr := ConnectionError(err.Error())
+		client.connectionErr <- connErr
+		return connErr
 	}
 
 	client.conn = conn
@@ -134,7 +122,7 @@ func (client *Client) Connect() error {
 		return ConnectionError(err.Error())
 	}
 	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF, client.connectionErr)
-	if err := client.writeFrame(connectFrame); err != nil {
+	if err := writeFrame(client.writer,connectFrame); err != nil {
 		client.sendConnectionError(err)
 		return err
 	}
@@ -162,7 +150,6 @@ func (client *Client) sendConnectionError(err error) {
 //StompConnector.Disconnect close our error channel then close the socket connection
 func (client *Client) Disconnect() error {
 	//signal read loop to shutdown
-	fmt.Println("disconnect called")
 	select {
 	case client.shutdown <- true:
 	default:
@@ -178,21 +165,17 @@ func (client *Client) Disconnect() error {
 }
 
 //StompConnector.RegisterDisconnectHandler register a handler func that is sent any disconnect errors
-func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) error {
-	client.ReconnectHandler = handler
-	if nil != client.conn {
-		return ErrPostConnectDisconnectHandler
-	}
+func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
+	client.DisconnectHandler = handler
 	go func(errChan chan error) {
 		//todo could end up with multiple handlers
 		//todo prob dont want to fire this multiple times between disconnects. Likely needs more sophistication
 		for err := range errChan {
 			if _, ok := err.(ConnectionError); ok {
-				client.ReconnectHandler(err)
+				client.DisconnectHandler(err)
 			}
 		}
 	}(client.connectionErr)
-	return nil
 }
 
 //StompPublisher.Send publish a message to the server
@@ -200,7 +183,7 @@ func (client *Client) Publish(body []byte, destination, contentType string, adde
 	headers := sendHeaders(destination, contentType, addedHeaders)
 	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
 	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
-	return client.writeFrame(frame)
+	return writeFrame(client.writer,frame)
 }
 
 //subscribe to messages sent to the destination.
@@ -211,47 +194,17 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 	if nil != err {
 		return err
 	}
+	idStr := id.String()
+	//ensure we don't end up with double registration
 	client.subscriptions.Lock()
 	defer client.subscriptions.Unlock()
-	client.subscriptions.subs[id.String()] = handler
-	subHeaders := subscribeHeaders(id.String(), destination)
-	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF, client.connectionErr}
-	if err := client.writeFrame(frame); err != nil {
-		return err
+	if _, ok := client.subscriptions.subs[idStr]; ok {
+		return ClientError("collision with subscription id")
 	}
-	return nil
-}
-
-func (client *Client) writeFrame(frame Frame) error {
-
-	frame.Headers["content-length"] = strconv.Itoa(len(frame.Body))
-	if _, err := client.writer.Write(frame.Command); err != nil {
-		//treating failure to write to the socket as a network error
-		return ConnectionError(err.Error())
-	}
-	fmt.Println("writing frame ", frame)
-	for k, v := range frame.Headers {
-		val := k + ":" + v + "\n"
-		if _, err := client.writer.WriteString(val); err != nil {
-			return err
-		}
-	}
-	if err := client.writer.WriteByte('\n'); err != nil {
-		return err
-	}
-	if len(frame.Body) > 0 {
-		if _, err := client.writer.Write(frame.Body); err != nil {
-			return err
-		}
-	}
-	if err := client.writer.Flush(); err != nil {
-		return err
-	}
-	//stomp protocol want a null byte at the end of the frame
-	if err := client.writer.WriteByte('\x00'); err != nil {
-		return err
-	}
-	if err := client.writer.Flush(); err != nil {
+	client.subscriptions.subs[idStr] = handler
+	subHeaders := subscribeHeaders(idStr, destination)
+	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
+	if err := writeFrame(client.writer,frame); err != nil {
 		return err
 	}
 	return nil
