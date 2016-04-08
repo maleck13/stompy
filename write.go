@@ -1,14 +1,14 @@
 package stompy
 
 import (
-	"strconv"
 	"io"
+	"strconv"
 )
 
 type SocketWriter interface {
 	io.Writer
-	WriteByte(c byte)error
-	Flush()error
+	WriteByte(c byte) error
+	Flush() error
 }
 
 func writeFrame(writer SocketWriter, frame Frame) error {

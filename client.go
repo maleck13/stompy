@@ -122,7 +122,7 @@ func (client *Client) Connect() error {
 		return ConnectionError(err.Error())
 	}
 	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF, client.connectionErr)
-	if err := writeFrame(client.writer,connectFrame); err != nil {
+	if err := writeFrame(client.writer, connectFrame); err != nil {
 		client.sendConnectionError(err)
 		return err
 	}
@@ -183,7 +183,7 @@ func (client *Client) Publish(body []byte, destination, contentType string, adde
 	headers := sendHeaders(destination, contentType, addedHeaders)
 	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
 	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
-	return writeFrame(client.writer,frame)
+	return writeFrame(client.writer, frame)
 }
 
 //subscribe to messages sent to the destination.
@@ -204,7 +204,7 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 	client.subscriptions.subs[idStr] = handler
 	subHeaders := subscribeHeaders(idStr, destination)
 	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
-	if err := writeFrame(client.writer,frame); err != nil {
+	if err := writeFrame(client.writer, frame); err != nil {
 		return err
 	}
 	return nil
