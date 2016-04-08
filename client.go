@@ -46,13 +46,13 @@ type DisconnectHandler func(error)
 type StompConnector interface {
 	Connect() error
 	Disconnect() error
-	RegisterDisconnectHandler(DisconnectHandler)
+	RegisterDisconnectHandler(handler DisconnectHandler)
 }
 
 //responsible for defining how a subscription should be handled
 type StompSubscriber interface {
 	//accepts a destination /test/test for example a handler function for handling messages from that subscription and any headers you want to override / set
-	Subscribe(string, SubscriptionHandler, HEADERS) error
+	Subscribe(destination string, handler SubscriptionHandler, headers HEADERS) error
 }
 
 //responsible for defining how a publish should happen
