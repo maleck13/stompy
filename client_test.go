@@ -15,7 +15,7 @@ var (
 	INTEGRATION_SERVER = os.Getenv("INTEGRATION_SERVER")
 )
 
-func TestConnectionError(t *testing.T) {
+func TestClient_Connect_Error(t *testing.T) {
 	opts := ClientOpts{
 		HostAndPort: "idonetexist:61613",
 		Timeout:     100 * time.Millisecond,
@@ -35,7 +35,7 @@ func TestConnectionError(t *testing.T) {
 	client.Disconnect()
 }
 
-func TestConnectionOk(t *testing.T) {
+func TestClient_Connect_Ok(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
 	}
@@ -54,7 +54,7 @@ func TestConnectionOk(t *testing.T) {
 	client.Disconnect()
 }
 
-func TestConnectionNotOkBadAuth(t *testing.T) {
+func TestClient_Connect_NotOkBadAuth(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
 	}
@@ -73,7 +73,7 @@ func TestConnectionNotOkBadAuth(t *testing.T) {
 	client.Disconnect()
 }
 
-func TestConnectionNotOkBadHost(t *testing.T) {
+func TestClient_Connect_NotOkBadHost(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
 	}
@@ -92,7 +92,7 @@ func TestConnectionNotOkBadHost(t *testing.T) {
 	client.Disconnect()
 }
 
-func TestBasicSend(t *testing.T) {
+func TestClient_PublishBasicSend(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
 	}
@@ -108,9 +108,9 @@ func TestBasicSend(t *testing.T) {
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
 	//defer client.Disconnect()
-	err = client.Publish([]byte(`{"test":"test"}`), "/test/test", "application/json", HEADERS{})
+	err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{},nil)
 	assert.NoError(t, err, "did not expect a connection error ")
-	time.Sleep(10000 * time.Millisecond) //give it time to receive the channel msg
+	time.Sleep(1000 * time.Millisecond) //give it time to receive the channel msg
 
 }
 
@@ -131,12 +131,41 @@ func TestClient_Subscribe(t *testing.T) {
 	assert.NoError(t, err, "did not expect a connection error ")
 	err = client.Subscribe("/test/test", func(f Frame) {
 		fmt.Println("recieved message ", string(f.Body))
-	}, HEADERS{})
+	}, StompHeaders{})
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	for i := 0; i < 20; i++ {
 		str := fmt.Sprintf("test %d ", i)
-		err = client.Publish([]byte(`{"test":"`+str+`"}`), "/test/test", "application/json", HEADERS{})
+		err = client.Publish("/test/test", "application/json", []byte(`{"test":"`+str+`"}`), StompHeaders{},nil)
 	}
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	time.Sleep(500 * time.Millisecond) //give it time to receive the channel msg
+}
+
+func TestClient_PublishWithReceipt(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
+	opts := ClientOpts{
+		HostAndPort: INTEGRATION_SERVER,
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "admin",
+		Version:     "1.1",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	assert.NoError(t, err, "did not expect a connection error ")
+	err = client.Subscribe("/test/test", func(f Frame) {
+		fmt.Println("recieved message ", string(f.Body))
+	}, StompHeaders{})
+	assert.NoError(t, err, "did not expect an error subscribing ")
+	headers := StompHeaders{}
+	headers["receipt"] = "message-1"
+	rec := NewReceipt(time.Second * 1)
+	err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), headers, rec)
+	assert.NoError(t, err, "did not expect an error subscribing ")
+	received := <- rec.receiptReceived
+	assert.True(t,received,"expected a receipt")
+	time.Sleep(time.Second * 2)
 }
