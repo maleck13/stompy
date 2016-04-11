@@ -41,7 +41,7 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 
 	for f := range incoming {
 		cmd := f.CommandString()
-		fmt.Println("command ",cmd)
+		fmt.Println("command ", cmd)
 		switch cmd {
 		case "MESSAGE":
 			id := f.Headers["subscription"]
@@ -56,10 +56,10 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 			break
 		case "RECEIPT":
 			if receiptId, ok := f.Headers["receipt-id"]; ok {
-			    if receipt := awaitingReceipt.Get(receiptId); nil != receipt{
-				    //if some one is listening on the channel send the receipt make sure to remove receipt
-				    receipt.receiptReceived <- true
-			    }
+				if receipt := awaitingReceipt.Get(receiptId); nil != receipt {
+					//if some one is listening on the channel send the receipt make sure to remove receipt
+					receipt.receiptReceived <- true
+				}
 			}
 			break
 

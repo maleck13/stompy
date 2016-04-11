@@ -108,7 +108,7 @@ func TestClient_PublishBasicSend(t *testing.T) {
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
 	//defer client.Disconnect()
-	err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{},nil)
+	err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, nil)
 	assert.NoError(t, err, "did not expect a connection error ")
 	time.Sleep(1000 * time.Millisecond) //give it time to receive the channel msg
 
@@ -135,7 +135,7 @@ func TestClient_Subscribe(t *testing.T) {
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	for i := 0; i < 20; i++ {
 		str := fmt.Sprintf("test %d ", i)
-		err = client.Publish("/test/test", "application/json", []byte(`{"test":"`+str+`"}`), StompHeaders{},nil)
+		err = client.Publish("/test/test", "application/json", []byte(`{"test":"`+str+`"}`), StompHeaders{}, nil)
 	}
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	time.Sleep(500 * time.Millisecond) //give it time to receive the channel msg
@@ -165,7 +165,7 @@ func TestClient_PublishWithReceipt(t *testing.T) {
 	rec := NewReceipt(time.Second * 1)
 	err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), headers, rec)
 	assert.NoError(t, err, "did not expect an error subscribing ")
-	received := <- rec.receiptReceived
-	assert.True(t,received,"expected a receipt")
+	received := <-rec.receiptReceived
+	assert.True(t, received, "expected a receipt")
 	time.Sleep(time.Second * 2)
 }

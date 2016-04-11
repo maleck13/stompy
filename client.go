@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"log"
 	"net"
-	"time"
-	"sync"
 	"strconv"
+	"sync"
+	"time"
 )
 
 const (
@@ -67,22 +67,21 @@ type messageStats struct {
 	count int
 }
 
-func (s *messageStats) Increment(){
+func (s *messageStats) Increment() {
 	s.Lock()
 	defer s.Unlock()
 	s.count++
 }
+
 var stats = &messageStats{}
 
-
-type Receipt struct{
+type Receipt struct {
 	receiptReceived chan bool
-	Timeout time.Duration
+	Timeout         time.Duration
 }
 
-
-func NewReceipt(timeout time.Duration )*Receipt{
-	return &Receipt{make(chan bool,1),timeout}
+func NewReceipt(timeout time.Duration) *Receipt {
+	return &Receipt{make(chan bool, 1), timeout}
 }
 
 type receipts struct {
@@ -90,16 +89,16 @@ type receipts struct {
 	receipts map[string]*Receipt
 }
 
-func (r *receipts) Add(id string,rec *Receipt)error{
+func (r *receipts) Add(id string, rec *Receipt) error {
 	r.Lock()
 	defer r.Unlock()
-	if _,ok := r.receipts[id]; ok{
+	if _, ok := r.receipts[id]; ok {
 		return ClientError("already a receipt with that id " + id)
 	}
 	r.receipts[id] = rec
 	//make sure we clean up
-	go func(){
-		<- time.Tick(rec.Timeout)
+	go func() {
+		<-time.Tick(rec.Timeout)
 		select {
 		case rec.receiptReceived <- false:
 		default:
@@ -110,31 +109,29 @@ func (r *receipts) Add(id string,rec *Receipt)error{
 	return nil
 }
 
-func (r *receipts) Remove(id string){
+func (r *receipts) Remove(id string) {
 	r.Lock()
 	defer r.Unlock()
-	if _,ok := r.receipts[id]; ok{
-		delete(r.receipts,id)
+	if _, ok := r.receipts[id]; ok {
+		delete(r.receipts, id)
 		return
 	}
 	return
 }
 
-func (r *receipts) Count()int{
+func (r *receipts) Count() int {
 	r.Lock()
 	defer r.Unlock()
 	return len(r.receipts)
 }
 
-func (r *receipts) Get(id string)*Receipt{
+func (r *receipts) Get(id string) *Receipt {
 	r.Lock()
 	defer r.Unlock()
 	return r.receipts[id]
 }
 
-var awaitingReceipt = &receipts{receipts:make(map[string]*Receipt)}
-
-
+var awaitingReceipt = &receipts{receipts: make(map[string]*Receipt)}
 
 //main client type for interacting with stomp. This is the exposed type
 type Client struct {
@@ -249,13 +246,13 @@ func (client *Client) Publish(destination, contentType string, body []byte, adde
 	stats.Increment()
 	headers := sendHeaders(destination, contentType, addedHeaders)
 	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
-	if receiptId, ok := headers["receipt"]; ok && receipt != nil{
-		if err := awaitingReceipt.Add(receiptId,receipt); err != nil{
+	if receiptId, ok := headers["receipt"]; ok && receipt != nil {
+		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
 			return err
 		}
-	}else if nil != receipt{
+	} else if nil != receipt {
 		receiptId := "message-" + strconv.Itoa(awaitingReceipt.Count())
-		awaitingReceipt.Add(receiptId,receipt)
+		awaitingReceipt.Add(receiptId, receipt)
 	}
 
 	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
