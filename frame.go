@@ -19,7 +19,14 @@ type Frame struct {
 	Body    []byte
 }
 
-func NewFrame(command []byte, headers HEADERS, body []byte, errChan chan error) Frame {
+func (f Frame) CommandString() string {
+	if len(f.Command) > 0 {
+		return string(f.Command[0 : len(f.Command)-1])
+	}
+	return ""
+}
+
+func NewFrame(command []byte, headers StompHeaders, body []byte, errChan chan error) Frame {
 	return Frame{
 		Command: command,
 		Headers: headers,

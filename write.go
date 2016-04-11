@@ -5,13 +5,13 @@ import (
 	"strconv"
 )
 
-type SocketWriter interface {
+type StompWriter interface {
 	io.Writer
 	WriteByte(c byte) error
 	Flush() error
 }
 
-func writeFrame(writer SocketWriter, frame Frame) error {
+func writeFrame(writer StompWriter, frame Frame) error {
 
 	//set content length
 	frame.Headers["content-length"] = strconv.Itoa(len(frame.Body))

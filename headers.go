@@ -1,6 +1,6 @@
 package stompy
 
-type HEADERS map[string]string
+type StompHeaders map[string]string
 
 type InvalidHeader struct {
 	message string
@@ -10,8 +10,8 @@ func (ih *InvalidHeader) Error() string {
 	return ih.message
 }
 
-func connectionHeaders(opts ClientOpts) (HEADERS, error) {
-	headers := HEADERS{}
+func connectionHeaders(opts ClientOpts) (StompHeaders, error) {
+	headers := StompHeaders{}
 	if opts.User != "" && opts.PassCode != "" {
 		headers["login"] = opts.User
 		headers["passcode"] = opts.PassCode
@@ -28,8 +28,8 @@ func connectionHeaders(opts ClientOpts) (HEADERS, error) {
 	return headers, nil
 }
 
-func sendHeaders(dest, contentType string, addedHeaders HEADERS) HEADERS {
-	headers := HEADERS{}
+func sendHeaders(dest, contentType string, addedHeaders StompHeaders) StompHeaders {
+	headers := StompHeaders{}
 	headers["content-type"] = contentType
 	headers["destination"] = dest
 	if nil == addedHeaders {
@@ -41,8 +41,8 @@ func sendHeaders(dest, contentType string, addedHeaders HEADERS) HEADERS {
 	return headers
 }
 
-func subscribeHeaders(id, dest string) HEADERS {
-	headers := HEADERS{}
+func subscribeHeaders(id, dest string) StompHeaders {
+	headers := StompHeaders{}
 	headers["id"] = id
 	headers["destination"] = dest
 	return headers
