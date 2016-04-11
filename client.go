@@ -52,7 +52,7 @@ type StompSubscriber interface {
 //responsible for defining how a publish should happen
 type StompPublisher interface {
 	//accepts a body, destination, content-type and any headers you wish to override or set
-	Publish(destination string, contentType string, body []byte, headers StompHeaders, receipt chan Frame) error
+	Publish(destination string, contentType string, body []byte, headers StompHeaders, receipt *Receipt) error
 }
 
 //A stomp client is a combination of all of these things
@@ -80,10 +80,59 @@ type Receipt struct{
 	Timeout time.Duration
 }
 
+
+func NewReceipt(timeout time.Duration )*Receipt{
+	return &Receipt{make(chan bool,1),timeout}
+}
+
 type receipts struct {
 	sync.Mutex
-	receipts []Receipt
+	receipts map[string]*Receipt
 }
+
+func (r *receipts) Add(id string,rec *Receipt)error{
+	r.Lock()
+	defer r.Unlock()
+	if _,ok := r.receipts[id]; ok{
+		return ClientError("already a receipt with that id " + id)
+	}
+	r.receipts[id] = rec
+	//make sure we clean up
+	go func(){
+		<- time.Tick(rec.Timeout)
+		select {
+		case rec.receiptReceived <- false:
+		default:
+		}
+		close(rec.receiptReceived)
+		r.Remove(id)
+	}()
+	return nil
+}
+
+func (r *receipts) Remove(id string){
+	r.Lock()
+	defer r.Unlock()
+	if _,ok := r.receipts[id]; ok{
+		delete(r.receipts,id)
+		return
+	}
+	return
+}
+
+func (r *receipts) Count()int{
+	r.Lock()
+	defer r.Unlock()
+	return len(r.receipts)
+}
+
+func (r *receipts) Get(id string)*Receipt{
+	r.Lock()
+	defer r.Unlock()
+	return r.receipts[id]
+}
+
+var awaitingReceipt = &receipts{receipts:make(map[string]*Receipt)}
 
 
 
@@ -196,18 +245,21 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
 }
 
 //StompPublisher.Send publish a message to the server
-func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders) error {
+func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
 	stats.Increment()
 	headers := sendHeaders(destination, contentType, addedHeaders)
 	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
+	if receiptId, ok := headers["receipt"]; ok && receipt != nil{
+		if err := awaitingReceipt.Add(receiptId,receipt); err != nil{
+			return err
+		}
+	}else if nil != receipt{
+		receiptId := "message-" + strconv.Itoa(awaitingReceipt.Count())
+		awaitingReceipt.Add(receiptId,receipt)
+	}
+
 	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
 	return writeFrame(client.writer, frame)
-}
-//returns a channel on which the receipt will be sent if received
-func (client *Client) PublishWithReceipt(destination, contentType string, body []byte, addedHeaders StompHeaders)(chan Frame,error)  {
-	stats.Increment()
-	msgId := "message-" + strconv.Itoa(stats.count)
-
 }
 
 //subscribe to messages sent to the destination. The SubscriptionHandler will also receive RECEIPTS if a receipt header is set

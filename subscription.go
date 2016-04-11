@@ -41,21 +41,26 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 
 	for f := range incoming {
 		cmd := f.CommandString()
-		fmt.Println("received msg in dispatch ", cmd, f)
+		fmt.Println("command ",cmd)
 		switch cmd {
 		case "MESSAGE":
 			id := f.Headers["subscription"]
 			if "" == id {
 				//err
 			}
-			fmt.Println("sub id ", id, " subs ", s.subs)
 			if sub, ok := s.subs[id]; ok {
 				go sub.Handler(f)
 			}
 			break
 		case "ERROR":
 			break
-		case "RECIEPT":
+		case "RECEIPT":
+			if receiptId, ok := f.Headers["receipt-id"]; ok {
+			    if receipt := awaitingReceipt.Get(receiptId); nil != receipt{
+				    //if some one is listening on the channel send the receipt make sure to remove receipt
+				    receipt.receiptReceived <- true
+			    }
+			}
 			break
 
 		}
