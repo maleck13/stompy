@@ -2,12 +2,12 @@ package stompy
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
 	"sync"
 	"time"
-	"fmt"
 )
 
 const (
@@ -286,7 +286,7 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 	if err := client.subscriptions.addSubscription(sub); err != nil {
 		return err
 	}
-	subHeaders := subscribeHeaders(sub.Id, destination,headers)
+	subHeaders := subscribeHeaders(sub.Id, destination, headers)
 	if receiptId, ok := subHeaders["receipt"]; ok && receipt != nil {
 		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
 			return err

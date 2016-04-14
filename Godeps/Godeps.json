@@ -1,9 +1,6 @@
 {
 	"ImportPath": "github.com/maleck13/stompy",
 	"GoVersion": "go1.6",
-	"Packages": [
-		"."
-	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/davecgh/go-spew/spew",

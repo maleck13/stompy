@@ -130,7 +130,7 @@ func TestClient_Subscribe(t *testing.T) {
 	assert.NoError(t, err, "did not expect a connection error ")
 	err = client.Subscribe("/test/test", func(f Frame) {
 		fmt.Println("recieved message ", string(f.Body))
-	}, StompHeaders{},nil)
+	}, StompHeaders{}, nil)
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	for i := 0; i < 20; i++ {
 		str := fmt.Sprintf("test %d ", i)
@@ -158,8 +158,8 @@ func TestClient_SubscribeWithReceipt(t *testing.T) {
 	rec := NewReceipt(time.Second * 1)
 	err = client.Subscribe("/test/test", func(f Frame) {
 		fmt.Println("recieved message ", string(f.Body))
-	}, StompHeaders{},rec)
-	received := <- rec.receiptReceived
+	}, StompHeaders{}, rec)
+	received := <-rec.receiptReceived
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	for i := 0; i < 20; i++ {
 		str := fmt.Sprintf("test %d ", i)
@@ -186,7 +186,7 @@ func TestClient_PublishWithReceipt(t *testing.T) {
 	assert.NoError(t, err, "did not expect a connection error ")
 	err = client.Subscribe("/test/test", func(f Frame) {
 		fmt.Println("recieved message ", string(f.Body))
-	}, StompHeaders{},nil)
+	}, StompHeaders{}, nil)
 	assert.NoError(t, err, "did not expect an error subscribing ")
 	headers := StompHeaders{}
 	headers["receipt"] = "message-1"
