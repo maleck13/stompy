@@ -41,9 +41,15 @@ func sendHeaders(dest, contentType string, addedHeaders StompHeaders) StompHeade
 	return headers
 }
 
-func subscribeHeaders(id, dest string) StompHeaders {
+func subscribeHeaders(id, dest string, addedHeaders StompHeaders) StompHeaders {
 	headers := StompHeaders{}
 	headers["id"] = id
 	headers["destination"] = dest
+	if nil == addedHeaders {
+		return headers
+	}
+	for k, v := range addedHeaders {
+		headers[k] = v
+	}
 	return headers
 }

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"fmt"
 )
 
 const (
@@ -46,7 +47,7 @@ type StompConnector interface {
 //responsible for defining how a subscription should be handled
 type StompSubscriber interface {
 	//accepts a destination /test/test for example a handler function for handling messages from that subscription and any headers you want to override / set
-	Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders) error
+	Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders, receipt *Receipt) error
 }
 
 //responsible for defining how a publish should happen
@@ -179,14 +180,16 @@ func (client *Client) Connect() error {
 	if err != nil {
 		return ConnectionError(err.Error())
 	}
-	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF, client.connectionErr)
+	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF)
 	if err := writeFrame(client.writer, connectFrame); err != nil {
+		fmt.Println("** error during initial connection write ** ", err)
 		client.sendConnectionError(err)
 		return err
 	}
 
 	//read frame after writing out connection to check we are connected
 	if _, err = client.reader.readFrame(); err != nil {
+		fmt.Println("** error during initial connection read **", err)
 		client.sendConnectionError(err)
 		return err
 	}
@@ -210,6 +213,15 @@ func (client *Client) sendConnectionError(err error) {
 
 //StompConnector.Disconnect close our error channel then close the socket connection
 func (client *Client) Disconnect() error {
+	//headers := StompHeaders{}
+	//headers["receipt"] = "disconnect"
+	//frame := NewFrame(_COMMAND_DISCONNECT,headers, _NULLBUFF)
+	//err := writeFrame(client.writer,frame);
+	//if nil == err {
+	//	frame, err = client.reader.readFrame()
+	//	fmt.Println("recieved final frame ",frame)
+	//}
+
 	//signal read loop to shutdown
 	select {
 	case client.shutdown <- true:
@@ -245,15 +257,17 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
 func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
 	stats.Increment()
 	headers := sendHeaders(destination, contentType, addedHeaders)
-	frame := NewFrame(_COMMAND_SEND, headers, body, client.connectionErr)
+
 	if receiptId, ok := headers["receipt"]; ok && receipt != nil {
 		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
 			return err
 		}
 	} else if nil != receipt {
 		receiptId := "message-" + strconv.Itoa(awaitingReceipt.Count())
+		headers["receipt"] = receiptId
 		awaitingReceipt.Add(receiptId, receipt)
 	}
+	frame := NewFrame(_COMMAND_SEND, headers, body)
 
 	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
 	return writeFrame(client.writer, frame)
@@ -261,7 +275,8 @@ func (client *Client) Publish(destination, contentType string, body []byte, adde
 
 //subscribe to messages sent to the destination. The SubscriptionHandler will also receive RECEIPTS if a receipt header is set
 //headers are id and ack
-func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders) error {
+func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders, receipt *Receipt) error {
+	stats.Increment()
 	//create an id
 	//ensure we don't end up with double registration
 	sub, err := NewSubscription(destination, handler, headers)
@@ -271,7 +286,16 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 	if err := client.subscriptions.addSubscription(sub); err != nil {
 		return err
 	}
-	subHeaders := subscribeHeaders(sub.Id, destination)
+	subHeaders := subscribeHeaders(sub.Id, destination,headers)
+	if receiptId, ok := subHeaders["receipt"]; ok && receipt != nil {
+		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
+			return err
+		}
+	} else if nil != receipt {
+		receiptId := "message-" + strconv.Itoa(awaitingReceipt.Count())
+		subHeaders["receipt"] = receiptId
+		awaitingReceipt.Add(receiptId, receipt)
+	}
 	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
 	if err := writeFrame(client.writer, frame); err != nil {
 		return err

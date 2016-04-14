@@ -5,6 +5,9 @@ var (
 	_COMMAND_DISCONNECT []byte = []byte("DISCONNECT\n")
 	_COMMAND_SUBSCRIBE  []byte = []byte("SUBSCRIBE\n")
 	_COMMAND_SEND       []byte = []byte("SEND\n")
+	_COMAND_TRANSACTION_BEGIN []byte = []byte("BEGIN\n")
+	_COMAND_TRANSACTION_COMMIT []byte = []byte("COMMIT\n")
+	_COMAND_TRANSACTION_ABORT []byte = []byte("ABORT\n")
 	_NULLBUFF                  = make([]uint8, 0)
 	newline                    = byte(10)
 	cr                         = byte(13)
@@ -26,7 +29,7 @@ func (f Frame) CommandString() string {
 	return ""
 }
 
-func NewFrame(command []byte, headers StompHeaders, body []byte, errChan chan error) Frame {
+func NewFrame(command []byte, headers StompHeaders, body []byte) Frame {
 	return Frame{
 		Command: command,
 		Headers: headers,
