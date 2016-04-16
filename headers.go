@@ -53,3 +53,16 @@ func subscribeHeaders(id, dest string, addedHeaders StompHeaders) StompHeaders {
 	}
 	return headers
 }
+
+func transactionHeaders(transactionId string, addedHeaders StompHeaders) StompHeaders {
+	headers := StompHeaders{}
+	headers["transaction"] = transactionId
+	if nil == addedHeaders {
+		return headers
+	}
+	for k, v := range addedHeaders {
+		headers[k] = v
+	}
+	return headers
+
+}

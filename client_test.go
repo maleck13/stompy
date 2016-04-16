@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 
+	"sync"
+
 	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/stretchr/testify/assert"
 )
 
@@ -185,14 +187,27 @@ func TestClient_PublishWithReceipt(t *testing.T) {
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect a connection error ")
 	err = client.Subscribe("/test/test", func(f Frame) {
-		fmt.Println("recieved message ", string(f.Body))
+		//fmt.Println("recieved message ", string(f.Body))
 	}, StompHeaders{}, nil)
+	client.RegisterDisconnectHandler(func(err error) {
+		fmt.Println("recieved disconnect err ", err)
+		assert.Fail(t, err.Error(), "disconnect error")
+	})
 	assert.NoError(t, err, "did not expect an error subscribing ")
-	headers := StompHeaders{}
-	headers["receipt"] = "message-1"
-	rec := NewReceipt(time.Second * 1)
-	err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), headers, rec)
-	assert.NoError(t, err, "did not expect an error subscribing ")
-	received := <-rec.receiptReceived
-	assert.True(t, received, "expected a receipt")
+	wait := &sync.WaitGroup{}
+	var done_count = 100
+	for i := 0; i < 200; i++ {
+		go func() {
+			wait.Add(1)
+			rec := NewReceipt(time.Second * 2)
+			err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
+			assert.NoError(t, err, "did not expect an error publishing ")
+			received := <-rec.Received
+			assert.True(t, received, "expected a receipt")
+			done_count--
+			wait.Done()
+		}()
+	}
+	wait.Wait()
+
 }

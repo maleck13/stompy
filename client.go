@@ -56,11 +56,18 @@ type StompPublisher interface {
 	Publish(destination string, contentType string, body []byte, headers StompHeaders, receipt *Receipt) error
 }
 
+type StompTransactor interface {
+	Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error
+	Abort()
+	Commit()
+}
+
 //A stomp client is a combination of all of these things
 type StompClient interface {
 	StompConnector
 	StompSubscriber
 	StompPublisher
+	StompTransactor
 }
 
 type messageStats struct {
@@ -68,25 +75,33 @@ type messageStats struct {
 	count int
 }
 
-func (s *messageStats) Increment() {
+func (s *messageStats) Increment() int {
 	s.Lock()
 	defer s.Unlock()
 	s.count++
+	return s.count
 }
 
 var stats = &messageStats{}
 
 type Receipt struct {
+	Received        chan bool
 	receiptReceived chan bool
 	Timeout         time.Duration
 }
 
+func (rec *Receipt) cleanUp(id string) {
+	awaitingReceipt.Remove(id)
+	close(rec.receiptReceived)
+	close(rec.Received)
+}
+
 func NewReceipt(timeout time.Duration) *Receipt {
-	return &Receipt{make(chan bool, 1), timeout}
+	return &Receipt{make(chan bool, 1), make(chan bool, 1), timeout}
 }
 
 type receipts struct {
-	sync.Mutex
+	sync.RWMutex
 	receipts map[string]*Receipt
 }
 
@@ -97,16 +112,23 @@ func (r *receipts) Add(id string, rec *Receipt) error {
 		return ClientError("already a receipt with that id " + id)
 	}
 	r.receipts[id] = rec
-	//make sure we clean up
-	go func() {
-		<-time.Tick(rec.Timeout)
+	//make sure we clean up. if we receive our receipt forward it on to the client
+	//after the timeout send received as false.
+	go func(receipt *Receipt, id string) {
+		defer receipt.cleanUp(id)
+
 		select {
-		case rec.receiptReceived <- false:
-		default:
+		case <-rec.receiptReceived:
+			fmt.Println("received reciept for ", id)
+			rec.Received <- true
+			break
+		case <-time.After(rec.Timeout):
+			fmt.Println("timeout exceeded for reciept ", id)
+			rec.Received <- false
+			break
 		}
-		close(rec.receiptReceived)
-		r.Remove(id)
-	}()
+
+	}(rec, id)
 	return nil
 }
 
@@ -121,14 +143,14 @@ func (r *receipts) Remove(id string) {
 }
 
 func (r *receipts) Count() int {
-	r.Lock()
-	defer r.Unlock()
+	r.RLock()
+	defer r.RUnlock()
 	return len(r.receipts)
 }
 
 func (r *receipts) Get(id string) *Receipt {
-	r.Lock()
-	defer r.Unlock()
+	r.RLock()
+	defer r.RUnlock()
 	return r.receipts[id]
 }
 
@@ -142,7 +164,6 @@ type Client struct {
 	msgChan           chan Frame        // read loop sends new messages on this channel
 	DisconnectHandler DisconnectHandler // a func that should do something in the case of a network disconnection
 	conn              net.Conn
-	writer            *bufio.Writer     //used to write to the network socket
 	reader            StompSocketReader //used to read from the network socket
 	subscriptions     *subscriptions
 	sync.Mutex
@@ -156,6 +177,27 @@ func NewClient(opts ClientOpts) StompClient {
 	subMap := make(map[string]subscription)
 	subs := &subscriptions{subs: subMap}
 	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs, msgChan: msgChan}
+}
+
+func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
+	headers := transactionHeaders(transId, addedHeaders)
+	headers, err := handleReceipt(headers, receipt)
+	if err != nil {
+		return err
+	}
+	f := NewFrame(_COMAND_TRANSACTION_BEGIN, headers, _NULLBUFF)
+	if err := writeFrame(bufio.NewWriter(client.conn), f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (client *Client) Abort() {
+
+}
+
+func (client *Client) Commit() {
+
 }
 
 //StompConnector.Connect creates a tcp connection. sends any error through the errChan also returns the error
@@ -172,8 +214,7 @@ func (client *Client) Connect() error {
 	}
 
 	client.conn = conn
-	//set up a buffered writer and reader for our socket
-	client.writer = bufio.NewWriter(conn)
+
 	client.reader = NewStompReader(conn, client.shutdown, client.connectionErr, client.msgChan)
 
 	headers, err := connectionHeaders(client.opts)
@@ -181,7 +222,7 @@ func (client *Client) Connect() error {
 		return ConnectionError(err.Error())
 	}
 	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF)
-	if err := writeFrame(client.writer, connectFrame); err != nil {
+	if err := writeFrame(bufio.NewWriter(conn), connectFrame); err != nil {
 		fmt.Println("** error during initial connection write ** ", err)
 		client.sendConnectionError(err)
 		return err
@@ -253,30 +294,37 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
 	}(client.connectionErr)
 }
 
-//StompPublisher.Send publish a message to the server
-func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
-	stats.Increment()
-	headers := sendHeaders(destination, contentType, addedHeaders)
-
+func handleReceipt(headers StompHeaders, receipt *Receipt) (StompHeaders, error) {
 	if receiptId, ok := headers["receipt"]; ok && receipt != nil {
 		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
-			return err
+			return headers, err
 		}
 	} else if nil != receipt {
-		receiptId := "message-" + strconv.Itoa(awaitingReceipt.Count())
+		receiptId := "message-" + strconv.Itoa(stats.Increment())
 		headers["receipt"] = receiptId
 		awaitingReceipt.Add(receiptId, receipt)
 	}
+
+	return headers, nil
+}
+
+//StompPublisher.Send publish a message to the server
+func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
+
+	headers := sendHeaders(destination, contentType, addedHeaders)
+	headers, err := handleReceipt(headers, receipt)
+	if err != nil {
+		return err
+	}
+
 	frame := NewFrame(_COMMAND_SEND, headers, body)
 
-	//todo should it be async if so how to handle error. Should we stop any sending before connection is ready?
-	return writeFrame(client.writer, frame)
+	return writeFrame(bufio.NewWriter(client.conn), frame)
 }
 
 //subscribe to messages sent to the destination. The SubscriptionHandler will also receive RECEIPTS if a receipt header is set
 //headers are id and ack
 func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders, receipt *Receipt) error {
-	stats.Increment()
 	//create an id
 	//ensure we don't end up with double registration
 	sub, err := NewSubscription(destination, handler, headers)
@@ -287,17 +335,12 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 		return err
 	}
 	subHeaders := subscribeHeaders(sub.Id, destination, headers)
-	if receiptId, ok := subHeaders["receipt"]; ok && receipt != nil {
-		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
-			return err
-		}
-	} else if nil != receipt {
-		receiptId := "message-" + strconv.Itoa(awaitingReceipt.Count())
-		subHeaders["receipt"] = receiptId
-		awaitingReceipt.Add(receiptId, receipt)
+	subHeaders, err = handleReceipt(subHeaders, receipt)
+	if err != nil {
+		return err
 	}
 	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
-	if err := writeFrame(client.writer, frame); err != nil {
+	if err := writeFrame(bufio.NewWriter(client.conn), frame); err != nil {
 		return err
 	}
 	return nil

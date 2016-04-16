@@ -79,6 +79,7 @@ func (sr StompSocketReader) startReadLoop() {
 
 			if err != nil {
 				sr.errChan <- ConnectionError("failed when reading frame " + err.Error())
+				sr.shutdown <- true
 			} else {
 				sr.msgChan <- frame
 			}

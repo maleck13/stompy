@@ -1,8 +1,9 @@
 package stompy
 
 import (
-	"fmt"
 	"sync"
+
+	"fmt"
 
 	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/nu7hatch/gouuid"
 )
@@ -38,10 +39,8 @@ type subscriptions struct {
 }
 
 func (s *subscriptions) dispatch(incoming chan Frame) {
-
 	for f := range incoming {
 		cmd := f.CommandString()
-		fmt.Println("command ", cmd)
 		switch cmd {
 		case "MESSAGE":
 			id := f.Headers["subscription"]
@@ -53,8 +52,10 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 			}
 			break
 		case "ERROR":
+			fmt.Println("recieved error frame ", f.CommandString())
 			break
 		case "RECEIPT":
+			fmt.Println("received receipt ", f.Headers)
 			if receiptId, ok := f.Headers["receipt-id"]; ok {
 				if receipt := awaitingReceipt.Get(receiptId); nil != receipt {
 					//if some one is listening on the channel send the receipt make sure to remove receipt
