@@ -40,7 +40,7 @@ type subscriptions struct {
 
 func (s *subscriptions) dispatch(incoming chan Frame) {
 
-	var forward = func(f Frame){
+	var forward = func(f Frame) {
 		id := f.Headers["subscription"]
 		if "" == id {
 			//err
@@ -70,7 +70,6 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 			break
 		}
 	}
-
 
 }
 

@@ -268,7 +268,7 @@ func TestClient_Unsubscribe(t *testing.T) {
 	err := client.Connect()
 	assert.NoError(t, err, "did not expect error connecting")
 	var rec = false
-	var wait =&sync.WaitGroup{}
+	var wait = &sync.WaitGroup{}
 	id, err := client.Subscribe("/test/unsub", func(f Frame) {
 		fmt.Println(f.CommandString())
 		assert.False(t, rec, "should only recieve one message")
