@@ -78,3 +78,23 @@ func unSubscribeHeaders(subId string, addedHeaders StompHeaders) StompHeaders {
 	}
 	return headers
 }
+
+func nackHeaders(subId, messageId,transId string)StompHeaders{
+	headers := StompHeaders{}
+	headers["subscription"] = subId
+	headers["message-id"] = messageId
+	if "" != transId{
+		headers["transaction"] = transId
+	}
+	return headers
+}
+
+func ackHeaders(subId, messageId,transId string)StompHeaders{
+	headers := StompHeaders{}
+	headers["subscription"] = subId
+	headers["message-id"] = messageId
+	if "" != transId{
+		headers["transaction"] = transId
+	}
+	return headers
+}

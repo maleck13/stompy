@@ -6,6 +6,8 @@ var (
 	_COMMAND_SUBSCRIBE         []byte = []byte("SUBSCRIBE\n")
 	_COMMAND_UNSUBSCRIBE       []byte = []byte("UNSUBSCRIBE\n")
 	_COMMAND_SEND              []byte = []byte("SEND\n")
+	_COMMAND_ACK		   []byte = []byte("ACK\n")
+	_COMMAND_NACK		   []byte = []byte("NACK\n")
 	_COMAND_TRANSACTION_BEGIN  []byte = []byte("BEGIN\n")
 	_COMAND_TRANSACTION_COMMIT []byte = []byte("COMMIT\n")
 	_COMAND_TRANSACTION_ABORT  []byte = []byte("ABORT\n")
@@ -28,6 +30,14 @@ func (f Frame) CommandString() string {
 		return string(f.Command[0 : len(f.Command)-1])
 	}
 	return ""
+}
+
+func (f Frame)Ack(){
+
+}
+
+func (f Frame)Nack()  {
+
 }
 
 func NewFrame(command []byte, headers StompHeaders, body []byte) Frame {

@@ -39,20 +39,25 @@ type subscriptions struct {
 }
 
 func (s *subscriptions) dispatch(incoming chan Frame) {
+
+	var forward = func(f Frame){
+		id := f.Headers["subscription"]
+		if "" == id {
+			//err
+		}
+		if sub, ok := s.subs[id]; ok {
+			go sub.Handler(f)
+		}
+	}
+
 	for f := range incoming {
 		cmd := f.CommandString()
 		switch cmd {
 		case "MESSAGE":
-			id := f.Headers["subscription"]
-			if "" == id {
-				//err
-			}
-			if sub, ok := s.subs[id]; ok {
-				go sub.Handler(f)
-			}
+			forward(f)
 			break
 		case "ERROR":
-			fmt.Println("recieved error frame ", f.CommandString())
+			forward(f)
 			break
 		case "RECEIPT":
 			fmt.Println("received receipt ", f.Headers)
@@ -63,10 +68,10 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 				}
 			}
 			break
-
 		}
-
 	}
+
+
 }
 
 func (s *subscriptions) addSubscription(sub subscription) error {
