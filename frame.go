@@ -4,6 +4,7 @@ var (
 	_COMMAND_CONNECT           []byte = []byte("CONNECT\n")
 	_COMMAND_DISCONNECT        []byte = []byte("DISCONNECT\n")
 	_COMMAND_SUBSCRIBE         []byte = []byte("SUBSCRIBE\n")
+	_COMMAND_UNSUBSCRIBE       []byte = []byte("UNSUBSCRIBE\n")
 	_COMMAND_SEND              []byte = []byte("SEND\n")
 	_COMAND_TRANSACTION_BEGIN  []byte = []byte("BEGIN\n")
 	_COMAND_TRANSACTION_COMMIT []byte = []byte("COMMIT\n")

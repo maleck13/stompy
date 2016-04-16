@@ -78,3 +78,11 @@ func (s *subscriptions) addSubscription(sub subscription) error {
 	s.subs[sub.Id] = sub
 	return nil
 }
+
+func (s *subscriptions) removeSubscription(subId string) {
+	s.Lock()
+	defer s.Unlock()
+	if _, ok := s.subs[subId]; ok {
+		delete(s.subs, subId)
+	}
+}

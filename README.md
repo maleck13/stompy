@@ -9,3 +9,4 @@ Currently a work in progress. Stomp client for golang
 
 * Transactions
 * Acks
+* Proper disconnect

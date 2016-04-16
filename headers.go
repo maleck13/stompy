@@ -66,3 +66,15 @@ func transactionHeaders(transactionId string, addedHeaders StompHeaders) StompHe
 	return headers
 
 }
+
+func unSubscribeHeaders(subId string, addedHeaders StompHeaders) StompHeaders {
+	headers := StompHeaders{}
+	headers["id"] = subId
+	if nil == addedHeaders {
+		return headers
+	}
+	for k, v := range addedHeaders {
+		headers[k] = v
+	}
+	return headers
+}
