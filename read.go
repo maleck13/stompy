@@ -13,7 +13,7 @@ type StompReader interface {
 }
 
 type StompSocketReader struct {
-	decoder decoder
+	decoder  decoder
 	reader   StompReader
 	shutdown chan bool
 	errChan  chan error
@@ -22,7 +22,7 @@ type StompSocketReader struct {
 
 func NewStompReader(con net.Conn, shutdownCh chan bool, errChan chan error, msgChan chan Frame, decoder decoder) StompSocketReader {
 	return StompSocketReader{
-		decoder: decoder,
+		decoder:  decoder,
 		reader:   bufio.NewReader(con),
 		shutdown: shutdownCh,
 		errChan:  errChan,

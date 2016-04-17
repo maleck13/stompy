@@ -5,30 +5,30 @@ import "strings"
 type StompHeaders map[string]string
 
 type encoding struct {
-	To string
+	To   string
 	From string
 }
 
 var encoders = map[string][]encoding{
-   "1.1":[]encoding{
-	encoding{"\\\\", "\\"},
-	encoding{"\\n", "\n"},
-	encoding{"\\c", ":"},
+	"1.1": []encoding{
+		encoding{"\\\\", "\\"},
+		encoding{"\\n", "\n"},
+		encoding{"\\c", ":"},
 	},
-   "1.2":[]encoding{
-	encoding{"\\\\", "\\"},
-	encoding{"\\n", "\n"},
-	encoding{"\\c", ":"},
-	encoding{"\\r","\r"},
+	"1.2": []encoding{
+		encoding{"\\\\", "\\"},
+		encoding{"\\n", "\n"},
+		encoding{"\\c", ":"},
+		encoding{"\\r", "\r"},
 	},
 }
 
 type encoder interface {
-	Encode(val string)string
+	Encode(val string) string
 }
 
 type decoder interface {
-	Decode(val string)string
+	Decode(val string) string
 }
 
 type encoderDecoder interface {
@@ -40,19 +40,18 @@ type headerEncoderDecoder struct {
 	version string
 }
 
-
-func (hd headerEncoderDecoder) Decode(val string)string{
+func (hd headerEncoderDecoder) Decode(val string) string {
 	encodings := encoders[hd.version]
-	for _,enc := range encodings{
-		val = strings.Replace(val,enc.To,enc.From, -1)
+	for _, enc := range encodings {
+		val = strings.Replace(val, enc.To, enc.From, -1)
 	}
 	return val
 }
 
-func (hd headerEncoderDecoder)Encode(val string)string{
+func (hd headerEncoderDecoder) Encode(val string) string {
 	encodings := encoders[hd.version]
-	for _,enc := range encodings{
-		val = strings.Replace(val,enc.From,enc.To, -1)
+	for _, enc := range encodings {
+		val = strings.Replace(val, enc.From, enc.To, -1)
 	}
 	return val
 }
