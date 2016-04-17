@@ -2,7 +2,6 @@ package stompy
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"strings"
 )
@@ -78,13 +77,16 @@ func (sr StompSocketReader) startReadLoop() {
 		//if we have clean shutdown ignore the error as the connection has been closed
 		select {
 		case <-sr.shutdown:
-			fmt.Println("error reading ", err, "ignoring as shutdown received")
 			return
 		default:
 
 			if err != nil {
-				sr.errChan <- ConnectionError("failed when reading frame " + err.Error())
-				sr.shutdown <- true
+				if _, ok := err.(BadFrameError); ok {
+					sr.errChan <- err
+				} else {
+					sr.errChan <- ConnectionError("failed when reading frame " + err.Error())
+					sr.shutdown <- true
+				}
 			} else {
 				sr.msgChan <- frame
 			}

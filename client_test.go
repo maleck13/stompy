@@ -290,3 +290,81 @@ func TestClient_Unsubscribe(t *testing.T) {
 	time.Sleep(time.Millisecond * 200)
 
 }
+
+func TestClient_Publish_Client_Ack_client(t *testing.T) {
+	opts := ClientOpts{
+		HostAndPort: INTEGRATION_SERVER,
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "admin",
+		Version:     "1.1",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	assert.NoError(t, err, "did not expect error connecting")
+
+	//simulate two subscriptions
+	var wait = &sync.WaitGroup{}
+	headers := StompHeaders{}
+	headers["ack"] = "client"
+	wait.Add(1)
+	rec := NewReceipt(time.Second * 2)
+
+	id, err := client.Subscribe("/test/ack", func(f Frame) {
+		fmt.Println("sub 1  **** ", f.CommandString())
+		wait.Done()
+	}, headers, nil)
+	err = client.Publish("/test/ack", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
+	assert.NoError(t, err, "did not expect an error publishing ")
+
+	<-rec.Received
+	wait.Wait()
+	client.Unsubscribe(id, StompHeaders{}, nil)
+
+	wait.Add(1)
+	_, err = client.Subscribe("/test/ack", func(f Frame) {
+		fmt.Println("sub 2  **** ", f.CommandString())
+		client.Ack(f)
+		wait.Done()
+	}, headers, nil)
+
+	assert.NoError(t, err, "did not expect error subscribing")
+	fmt.Println("waiting")
+	wait.Wait()
+
+}
+
+func TestClient_Publish_Client_Ack_client_individual(t *testing.T) {
+	opts := ClientOpts{
+		HostAndPort: INTEGRATION_SERVER,
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "admin",
+		PassCode:    "admin",
+		Version:     "1.2",
+	}
+	client := NewClient(opts)
+	err := client.Connect()
+	assert.NoError(t, err, "did not expect error connecting")
+
+	//simulate two subscriptions
+	var wait = &sync.WaitGroup{}
+	headers := StompHeaders{}
+	headers["ack"] = "client-individual"
+	wait.Add(1)
+	_, err = client.Subscribe("/test/ack2", func(f Frame) {
+		if err := client.Ack(f); err != nil {
+			assert.NoError(t, err, "did not expect err")
+		}
+		wait.Done()
+	}, headers, nil)
+
+	sendHeaders := StompHeaders{}
+	//sendHeaders["persistent"] = "true"
+	//expire := time.Now().Add(time.Second*2).UTC().Unix() * 1000
+	//sendHeaders["expires"] = strconv.Itoa(int(expire))
+	err = client.Publish("/test/ack2", "application/json", []byte(`{"test":"test"}`), sendHeaders, nil)
+	assert.NoError(t, err, "did not expect an error publishing ")
+	wait.Wait()
+}

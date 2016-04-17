@@ -31,14 +31,6 @@ func (f Frame) CommandString() string {
 	return ""
 }
 
-func (f Frame) Ack() {
-
-}
-
-func (f Frame) Nack() {
-
-}
-
 func NewFrame(command []byte, headers StompHeaders, body []byte) Frame {
 	return Frame{
 		Command: command,

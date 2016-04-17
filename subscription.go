@@ -3,8 +3,6 @@ package stompy
 import (
 	"sync"
 
-	"fmt"
-
 	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/nu7hatch/gouuid"
 )
 
@@ -38,6 +36,10 @@ type subscriptions struct {
 	subs map[string]subscription
 }
 
+func NewSubscriptions() *subscriptions {
+	return &subscriptions{subs: make(map[string]subscription)}
+}
+
 func (s *subscriptions) dispatch(incoming chan Frame) {
 
 	var forward = func(f Frame) {
@@ -60,7 +62,6 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 			forward(f)
 			break
 		case "RECEIPT":
-			fmt.Println("received receipt ", f.Headers)
 			if receiptId, ok := f.Headers["receipt-id"]; ok {
 				if receipt := awaitingReceipt.Get(receiptId); nil != receipt {
 					//if some one is listening on the channel send the receipt make sure to remove receipt

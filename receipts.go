@@ -1,7 +1,6 @@
 package stompy
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -41,11 +40,9 @@ func (r *receipts) Add(id string, rec *Receipt) error {
 
 		select {
 		case <-rec.receiptReceived:
-			fmt.Println("received reciept for ", id)
 			rec.Received <- true
 			break
 		case <-time.After(rec.Timeout):
-			fmt.Println("timeout exceeded for reciept ", id)
 			rec.Received <- false
 			break
 		}

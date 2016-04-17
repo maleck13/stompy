@@ -48,6 +48,8 @@ type StompSubscriber interface {
 	//accepts a destination /test/test for example a handler function for handling messages from that subscription and any headers you want to override / set
 	Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders, receipt *Receipt) (string, error)
 	Unsubscribe(subId string, headers StompHeaders, receipt *Receipt) error
+	Ack(msg Frame) error
+	Nack(msg Frame) error
 }
 
 //responsible for defining how a publish should happen
@@ -95,6 +97,7 @@ type Client struct {
 	reader            StompSocketReader //used to read from the network socket
 	subscriptions     *subscriptions
 	encoderDecoder    encoderDecoder
+	headersFactory    headers
 }
 
 //create a new client based on a set of options
@@ -105,11 +108,13 @@ func NewClient(opts ClientOpts) StompClient {
 	subMap := make(map[string]subscription)
 	subs := &subscriptions{subs: subMap}
 	encoderDecoder := headerEncoderDecoder{opts.Version}
-	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs, msgChan: msgChan, encoderDecoder: encoderDecoder}
+	headersFactory := headers{version: opts.Version}
+	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs,
+		msgChan: msgChan, encoderDecoder: encoderDecoder, headersFactory: headersFactory}
 }
 
 func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
-	headers := transactionHeaders(transId, addedHeaders)
+	headers := client.headersFactory.transactionHeaders(transId, addedHeaders)
 	headers, err := handleReceipt(headers, receipt)
 	if err != nil {
 		return err
@@ -127,6 +132,32 @@ func (client *Client) Abort() {
 
 func (client *Client) Commit() {
 
+}
+
+func (client *Client) Ack(msg Frame) error {
+	if _, ok := msg.Headers["message-id"]; !ok {
+		return ClientError("cannot ack message without message-id header")
+	}
+	msgId := msg.Headers["message-id"]
+	transId := msg.Headers["transaction"]
+	subId := msg.Headers["subscription"]
+	ackid := msg.Headers["ack"]
+	headers := client.headersFactory.ackHeaders(msgId, subId, ackid, transId)
+	frame := NewFrame(_COMMAND_ACK, headers, _NULLBUFF)
+	return writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder)
+}
+
+func (client *Client) Nack(msg Frame) error {
+	if _, ok := msg.Headers["message-id"]; !ok {
+		return ClientError("cannot ack message without message-id header")
+	}
+	msgId := msg.Headers["message-id"]
+	transId := msg.Headers["transaction"]
+	subId := msg.Headers["subscription"]
+	ackid := msg.Headers["ack"]
+	headers := client.headersFactory.nackHeaders(msgId, subId, ackid, transId)
+	frame := NewFrame(_COMMAND_NACK, headers, _NULLBUFF)
+	return writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder)
 }
 
 //StompConnector.Connect creates a tcp connection. sends any error through the errChan also returns the error
@@ -149,7 +180,7 @@ func (client *Client) Connect() error {
 
 	client.reader = NewStompReader(conn, client.shutdown, client.connectionErr, client.msgChan, encoder)
 
-	headers, err := connectionHeaders(client.opts)
+	headers, err := client.headersFactory.connectionHeaders(client.opts)
 	if err != nil {
 		return ConnectionError(err.Error())
 	}
@@ -222,7 +253,7 @@ func (client *Client) Disconnect() error {
 		<-rec.Received
 		//signal read loop to shutdown
 		client.shutdown <- true
-
+		client.subscriptions = NewSubscriptions()
 		close(client.connectionErr)
 		close(client.shutdown)
 		close(client.msgChan)
@@ -263,7 +294,7 @@ func handleReceipt(headers StompHeaders, receipt *Receipt) (StompHeaders, error)
 //StompPublisher.Send publish a message to the server
 func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
 
-	headers := sendHeaders(destination, contentType, addedHeaders)
+	headers := client.headersFactory.sendHeaders(destination, contentType, addedHeaders)
 	headers, err := handleReceipt(headers, receipt)
 	if err != nil {
 		return err
@@ -286,7 +317,7 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 	if err := client.subscriptions.addSubscription(sub); err != nil {
 		return "", err
 	}
-	subHeaders := subscribeHeaders(sub.Id, destination, headers)
+	subHeaders := client.headersFactory.subscribeHeaders(sub.Id, destination, headers)
 	subHeaders, err = handleReceipt(subHeaders, receipt)
 	if err != nil {
 		return "", err
@@ -300,7 +331,7 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 }
 
 func (client *Client) Unsubscribe(id string, headers StompHeaders, receipt *Receipt) error {
-	unSub := unSubscribeHeaders(id, headers)
+	unSub := client.headersFactory.unSubscribeHeaders(id, headers)
 	unSub, err := handleReceipt(unSub, receipt)
 	if err != nil {
 		return err

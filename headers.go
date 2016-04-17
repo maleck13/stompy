@@ -64,7 +64,11 @@ func (ih *InvalidHeader) Error() string {
 	return ih.message
 }
 
-func connectionHeaders(opts ClientOpts) (StompHeaders, error) {
+type headers struct {
+	version string
+}
+
+func (h headers) connectionHeaders(opts ClientOpts) (StompHeaders, error) {
 	headers := StompHeaders{}
 	if opts.User != "" && opts.PassCode != "" {
 		headers["login"] = opts.User
@@ -82,7 +86,7 @@ func connectionHeaders(opts ClientOpts) (StompHeaders, error) {
 	return headers, nil
 }
 
-func sendHeaders(dest, contentType string, addedHeaders StompHeaders) StompHeaders {
+func (h headers) sendHeaders(dest, contentType string, addedHeaders StompHeaders) StompHeaders {
 	headers := StompHeaders{}
 	headers["content-type"] = contentType
 	headers["destination"] = dest
@@ -95,7 +99,7 @@ func sendHeaders(dest, contentType string, addedHeaders StompHeaders) StompHeade
 	return headers
 }
 
-func subscribeHeaders(id, dest string, addedHeaders StompHeaders) StompHeaders {
+func (h headers) subscribeHeaders(id, dest string, addedHeaders StompHeaders) StompHeaders {
 	headers := StompHeaders{}
 	headers["id"] = id
 	headers["destination"] = dest
@@ -108,7 +112,7 @@ func subscribeHeaders(id, dest string, addedHeaders StompHeaders) StompHeaders {
 	return headers
 }
 
-func transactionHeaders(transactionId string, addedHeaders StompHeaders) StompHeaders {
+func (h headers) transactionHeaders(transactionId string, addedHeaders StompHeaders) StompHeaders {
 	headers := StompHeaders{}
 	headers["transaction"] = transactionId
 	if nil == addedHeaders {
@@ -121,7 +125,7 @@ func transactionHeaders(transactionId string, addedHeaders StompHeaders) StompHe
 
 }
 
-func unSubscribeHeaders(subId string, addedHeaders StompHeaders) StompHeaders {
+func (h headers) unSubscribeHeaders(subId string, addedHeaders StompHeaders) StompHeaders {
 	headers := StompHeaders{}
 	headers["id"] = subId
 	if nil == addedHeaders {
@@ -133,22 +137,32 @@ func unSubscribeHeaders(subId string, addedHeaders StompHeaders) StompHeaders {
 	return headers
 }
 
-func nackHeaders(subId, messageId, transId string) StompHeaders {
+func (h headers) nackHeaders(messageId, subId, ackId, transId string) StompHeaders {
 	headers := StompHeaders{}
-	headers["subscription"] = subId
 	headers["message-id"] = messageId
+	if "" != ackId {
+		headers["id"] = ackId
+	}
 	if "" != transId {
 		headers["transaction"] = transId
+	}
+	if "" != subId {
+		headers["subscription"] = subId
 	}
 	return headers
 }
 
-func ackHeaders(subId, messageId, transId string) StompHeaders {
+func (h headers) ackHeaders(messageId, subId, ackId, transId string) StompHeaders {
 	headers := StompHeaders{}
-	headers["subscription"] = subId
 	headers["message-id"] = messageId
+	if "" != ackId {
+		headers["id"] = ackId
+	}
 	if "" != transId {
 		headers["transaction"] = transId
+	}
+	if "" != subId {
+		headers["subscription"] = subId
 	}
 	return headers
 }
