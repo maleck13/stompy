@@ -15,7 +15,6 @@ var (
 	newline                           = byte(10)
 	cr                                = byte(13)
 	colon                             = byte(58)
-	nullByte                          = byte(0)
 )
 
 //stomp frame is made up of a command, headers and body. The err channel is for communicating back to the client on connection error

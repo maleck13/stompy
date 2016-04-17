@@ -13,14 +13,16 @@ type StompReader interface {
 }
 
 type StompSocketReader struct {
+	decoder decoder
 	reader   StompReader
 	shutdown chan bool
 	errChan  chan error
 	msgChan  chan Frame // we may be over complicating here
 }
 
-func NewStompReader(con net.Conn, shutdownCh chan bool, errChan chan error, msgChan chan Frame) StompSocketReader {
+func NewStompReader(con net.Conn, shutdownCh chan bool, errChan chan error, msgChan chan Frame, decoder decoder) StompSocketReader {
 	return StompSocketReader{
+		decoder: decoder,
 		reader:   bufio.NewReader(con),
 		shutdown: shutdownCh,
 		errChan:  errChan,
@@ -39,7 +41,7 @@ func (sr StompSocketReader) readFrame() (Frame, error) {
 	}
 	f.Command = line
 	//sort out our headers
-	f.Headers = make(map[string]string)
+	f.Headers = StompHeaders{}
 	for {
 		header, err := sr.reader.ReadString('\n')
 		if nil != err {
@@ -49,12 +51,15 @@ func (sr StompSocketReader) readFrame() (Frame, error) {
 			//reached end of headers break should we set some short deadlock break?
 			break
 		}
-		parsed := strings.SplitN(header, ":", 2)
+
+		parsed := strings.SplitN(header[0:len(header)-1], ":", 2)
 		if len(parsed) != 2 {
 			return f, BadFrameError("failed to parse header correctly " + header)
 		}
 		//todo need to decode the headers
-		f.Headers[strings.TrimSpace(parsed[0])] = strings.TrimSpace(parsed[1])
+		key := sr.decoder.Decode(parsed[0])
+		val := sr.decoder.Decode(parsed[1])
+		f.Headers[key] = val
 	}
 	//ready body
 	body, err := sr.reader.ReadBytes('\n')

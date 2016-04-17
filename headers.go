@@ -1,6 +1,61 @@
 package stompy
 
+import "strings"
+
 type StompHeaders map[string]string
+
+type encoding struct {
+	To string
+	From string
+}
+
+var encoders = map[string][]encoding{
+   "1.1":[]encoding{
+	encoding{"\\\\", "\\"},
+	encoding{"\\n", "\n"},
+	encoding{"\\c", ":"},
+	},
+   "1.2":[]encoding{
+	encoding{"\\\\", "\\"},
+	encoding{"\\n", "\n"},
+	encoding{"\\c", ":"},
+	encoding{"\\r","\r"},
+	},
+}
+
+type encoder interface {
+	Encode(val string)string
+}
+
+type decoder interface {
+	Decode(val string)string
+}
+
+type encoderDecoder interface {
+	encoder
+	decoder
+}
+
+type headerEncoderDecoder struct {
+	version string
+}
+
+
+func (hd headerEncoderDecoder) Decode(val string)string{
+	encodings := encoders[hd.version]
+	for _,enc := range encodings{
+		val = strings.Replace(val,enc.To,enc.From, -1)
+	}
+	return val
+}
+
+func (hd headerEncoderDecoder)Encode(val string)string{
+	encodings := encoders[hd.version]
+	for _,enc := range encodings{
+		val = strings.Replace(val,enc.From,enc.To, -1)
+	}
+	return val
+}
 
 type InvalidHeader struct {
 	message string

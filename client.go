@@ -94,7 +94,7 @@ type Client struct {
 	conn              net.Conn
 	reader            StompSocketReader //used to read from the network socket
 	subscriptions     *subscriptions
-	sync.Mutex
+	encoderDecoder    encoderDecoder
 }
 
 //create a new client based on a set of options
@@ -104,7 +104,8 @@ func NewClient(opts ClientOpts) StompClient {
 	msgChan := make(chan Frame)
 	subMap := make(map[string]subscription)
 	subs := &subscriptions{subs: subMap}
-	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs, msgChan: msgChan}
+	encoderDecoder := headerEncoderDecoder{opts.Version}
+	return &Client{opts: opts, connectionErr: errChan, shutdown: shutdown, subscriptions: subs, msgChan: msgChan,encoderDecoder:encoderDecoder}
 }
 
 func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
@@ -114,7 +115,7 @@ func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *
 		return err
 	}
 	f := NewFrame(_COMAND_TRANSACTION_BEGIN, headers, _NULLBUFF)
-	if err := writeFrame(bufio.NewWriter(client.conn), f); err != nil {
+	if err := writeFrame(bufio.NewWriter(client.conn), f,client.encoderDecoder); err != nil {
 		return err
 	}
 	return nil
@@ -143,14 +144,17 @@ func (client *Client) Connect() error {
 
 	client.conn = conn
 
-	client.reader = NewStompReader(conn, client.shutdown, client.connectionErr, client.msgChan)
+	//setup version specific header encoder
+	encoder := headerEncoderDecoder{client.opts.Version}
+
+	client.reader = NewStompReader(conn, client.shutdown, client.connectionErr, client.msgChan,encoder)
 
 	headers, err := connectionHeaders(client.opts)
 	if err != nil {
 		return ConnectionError(err.Error())
 	}
 	connectFrame := NewFrame(_COMMAND_CONNECT, headers, _NULLBUFF)
-	if err := writeFrame(bufio.NewWriter(conn), connectFrame); err != nil {
+	if err := writeFrame(bufio.NewWriter(conn), connectFrame,encoder); err != nil {
 		client.sendConnectionError(err)
 		return err
 	}
@@ -212,7 +216,7 @@ func (client *Client) Disconnect() error {
 		awaitingReceipt.Add("disconnect", rec)
 		frame := NewFrame(_COMMAND_DISCONNECT, headers, _NULLBUFF)
 
-		if err := writeFrame(bufio.NewWriter(client.conn), frame); err != nil {
+		if err := writeFrame(bufio.NewWriter(client.conn), frame,client.encoderDecoder); err != nil {
 			return err
 		}
 		<-rec.Received
@@ -267,7 +271,7 @@ func (client *Client) Publish(destination, contentType string, body []byte, adde
 
 	frame := NewFrame(_COMMAND_SEND, headers, body)
 
-	return writeFrame(bufio.NewWriter(client.conn), frame)
+	return writeFrame(bufio.NewWriter(client.conn), frame,client.encoderDecoder)
 }
 
 //subscribe to messages sent to the destination. The SubscriptionHandler will also receive RECEIPTS if a receipt header is set
@@ -289,7 +293,7 @@ func (client *Client) Subscribe(destination string, handler SubscriptionHandler,
 	}
 	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
 	//todo think about if we have no conn
-	if err := writeFrame(bufio.NewWriter(client.conn), frame); err != nil {
+	if err := writeFrame(bufio.NewWriter(client.conn), frame,client.encoderDecoder); err != nil {
 		return "", err
 	}
 	return sub.Id, nil
@@ -303,7 +307,7 @@ func (client *Client) Unsubscribe(id string, headers StompHeaders, receipt *Rece
 	}
 	frame := Frame{_COMMAND_UNSUBSCRIBE, unSub, _NULLBUFF}
 	client.subscriptions.removeSubscription(id)
-	if err := writeFrame(bufio.NewWriter(client.conn), frame); err != nil {
+	if err := writeFrame(bufio.NewWriter(client.conn), frame,client.encoderDecoder); err != nil {
 		return err
 	}
 	return nil
