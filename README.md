@@ -8,5 +8,4 @@ Currently a work in progress. Stomp client for golang
 
 
 * Transactions
-* Acks
-* Proper disconnect
+* test against 1.1 and 1.2
