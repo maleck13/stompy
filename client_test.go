@@ -107,8 +107,8 @@ func TestClient_PublishBasicSend(t *testing.T) {
 		rec := NewReceipt(time.Second * 1)
 		err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
 		assert.NoError(t, err, "did not expect a connection error ")
-		received := <- rec.Received
-		assert.True(t,received,"expected to receive a receipt after send")
+		received := <-rec.Received
+		assert.True(t, received, "expected to receive a receipt after send")
 	}
 
 }
@@ -129,13 +129,13 @@ func TestClient_Subscribe(t *testing.T) {
 		wait := &sync.WaitGroup{}
 		_, err = client.Subscribe("/test/testsub", func(f Frame) {
 			wait.Done()
-			assert.Equal(t,"MESSAGE",f.CommandString(),"expected a message")
+			assert.Equal(t, "MESSAGE", f.CommandString(), "expected a message")
 		}, StompHeaders{}, nil)
 		assert.NoError(t, err, "did not expect an error subscribing ")
 		for i := 0; i < 20; i++ {
 			wait.Add(1)
 			str := fmt.Sprintf("test %d ", i)
-			err = client.Publish("/test/testsub", "application/json", []byte(`{"test":"` + str + `"}`), StompHeaders{}, nil)
+			err = client.Publish("/test/testsub", "application/json", []byte(`{"test":"`+str+`"}`), StompHeaders{}, nil)
 		}
 		wait.Wait()
 		client.Disconnect()
@@ -216,7 +216,7 @@ func TestClient_Connect_BadVersion(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
 	}
-	opts := GenerateClientOpts(INTEGRATION_SERVER,"admin","admin","1.0")
+	opts := GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.0")
 	client := NewClient(opts)
 	err := client.Connect()
 	assert.Error(t, err, " expected an error connectiong with unsupported version")
@@ -330,8 +330,8 @@ func TestClient_Publish_Client_Ack_client_individual(t *testing.T) {
 		err = client.Publish("/test/ack2", "application/json", []byte(`{"test":"test"}`), sendHeaders, nil)
 		assert.NoError(t, err, "did not expect an error publishing ")
 		wait.Wait()
-		err  = client.Disconnect()
-		assert.NoError(t,err,"did not expect an error disconnecting")
+		err = client.Disconnect()
+		assert.NoError(t, err, "did not expect an error disconnecting")
 	}
 }
 
@@ -353,16 +353,16 @@ func TestClient_Transaction_Commit(t *testing.T) {
 			fmt.Println(f.Headers)
 		}, StompHeaders{}, nil)
 
-		err = client.Begin("transid",StompHeaders{},rec)
-		assert.NoError(t,err,"did not expect an error transaction Begin")
-		received := <- rec.Received
-		assert.True(t,received,"expected received receipt")
+		err = client.Begin("transid", StompHeaders{}, rec)
+		assert.NoError(t, err, "did not expect an error transaction Begin")
+		received := <-rec.Received
+		assert.True(t, received, "expected received receipt")
 		headers := StompHeaders{}
 		headers["transaction"] = "transid"
-		err = client.Publish("/test/trans","application/json",[]byte(`{"test":"test"}`),headers,nil)
-		assert.NoError(t,err,"did not expect an error transaction Commit")
+		err = client.Publish("/test/trans", "application/json", []byte(`{"test":"test"}`), headers, nil)
+		assert.NoError(t, err, "did not expect an error transaction Commit")
 		rec = NewReceipt(time.Second * 1)
-		client.Commit("transid",StompHeaders{},rec)
+		client.Commit("transid", StompHeaders{}, rec)
 	}
 }
 

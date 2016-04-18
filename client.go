@@ -60,8 +60,8 @@ type StompPublisher interface {
 
 type StompTransactor interface {
 	Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error
-	Abort(transId string, addedHeaders StompHeaders, receipt *Receipt)error
-	Commit(transId string, addedHeaders StompHeaders, receipt *Receipt)error
+	Abort(transId string, addedHeaders StompHeaders, receipt *Receipt) error
+	Commit(transId string, addedHeaders StompHeaders, receipt *Receipt) error
 }
 
 //A stomp client is a combination of all of these things
