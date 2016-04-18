@@ -60,8 +60,8 @@ type StompPublisher interface {
 
 type StompTransactor interface {
 	Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error
-	Abort()
-	Commit()
+	Abort(transId string, addedHeaders StompHeaders, receipt *Receipt)error
+	Commit(transId string, addedHeaders StompHeaders, receipt *Receipt)error
 }
 
 //A stomp client is a combination of all of these things
@@ -126,12 +126,30 @@ func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *
 	return nil
 }
 
-func (client *Client) Abort() {
-
+func (client *Client) Abort(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
+	headers := client.headersFactory.transactionHeaders(transId, addedHeaders)
+	headers, err := handleReceipt(headers, receipt)
+	if err != nil {
+		return err
+	}
+	f := NewFrame(_COMAND_TRANSACTION_ABORT, headers, _NULLBUFF)
+	if err := writeFrame(bufio.NewWriter(client.conn), f, client.encoderDecoder); err != nil {
+		return err
+	}
+	return nil
 }
 
-func (client *Client) Commit() {
-
+func (client *Client) Commit(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
+	headers := client.headersFactory.transactionHeaders(transId, addedHeaders)
+	headers, err := handleReceipt(headers, receipt)
+	if err != nil {
+		return err
+	}
+	f := NewFrame(_COMAND_TRANSACTION_COMMIT, headers, _NULLBUFF)
+	if err := writeFrame(bufio.NewWriter(client.conn), f, client.encoderDecoder); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (client *Client) Ack(msg Frame) error {
