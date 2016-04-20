@@ -362,7 +362,8 @@ func TestClient_Transaction_Commit(t *testing.T) {
 		err = client.Publish("/test/trans", "application/json", []byte(`{"test":"test"}`), headers, nil)
 		assert.NoError(t, err, "did not expect an error transaction Commit")
 		rec = NewReceipt(time.Second * 1)
-		client.Commit("transid", StompHeaders{}, rec)
+		err = client.Commit("transid", StompHeaders{}, rec)
+		assert.NoError(t,err,"did not expect an error commiting transaction")
 	}
 }
 
@@ -376,6 +377,27 @@ func TestClient_Transaction_Abort(t *testing.T) {
 	}
 	for _, opts := range tableOpts {
 		fmt.Println("testing version ", opts.Version)
+		client := NewClient(opts)
+		err := client.Connect()
+		assert.NoError(t, err, "did not expect error connecting")
+		rec := NewReceipt(time.Second * 1)
+		_, err = client.Subscribe("/test/trans2", func(f Frame) {
+			fmt.Println(f.Headers)
+		}, StompHeaders{}, nil)
+
+		err = client.Begin("transid2", StompHeaders{}, rec)
+		assert.NoError(t, err, "did not expect an error transaction Begin")
+		received := <-rec.Received
+		assert.True(t, received, "expected received receipt")
+		headers := StompHeaders{}
+		headers["transaction"] = "transid2"
+		err = client.Publish("/test/trans2", "application/json", []byte(`{"test":"test"}`), headers, nil)
+		assert.NoError(t, err, "did not expect an error transaction Commit")
+		rec = NewReceipt(time.Second * 1)
+		err = client.Abort("transid", StompHeaders{}, rec)
+		received = <-rec.Received
+		assert.True(t,received, "expected receipt ")
+		assert.NoError(t,err,"did not expect an error commiting transaction")
 	}
 
 }
