@@ -1,4 +1,4 @@
-# Stompy
+# Stompy A golang stomp client. Supports stomp vers 1.1 and 1.2
 
 
 Currently a work in progress. Stomp client for golang
