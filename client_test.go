@@ -129,6 +129,7 @@ func TestClient_Subscribe(t *testing.T) {
 		wait := &sync.WaitGroup{}
 		_, err = client.Subscribe("/test/testsub", func(f Frame) {
 			wait.Done()
+			fmt.Println(string(f.Body))
 			assert.Equal(t, "MESSAGE", f.CommandString(), "expected a message")
 		}, StompHeaders{}, nil)
 		assert.NoError(t, err, "did not expect an error subscribing ")

@@ -65,7 +65,10 @@ func (sr StompSocketReader) readFrame() (Frame, error) {
 	if err != nil {
 		return f, err
 	}
-	f.Body = body[0 : len(body)-1]
+	if 0 != len(body) {
+		//return all but last 2 bytes which are a nul byte and a \n
+		f.Body = body[0 : len(body) - 2]
+	}
 
 	return f, nil
 }
