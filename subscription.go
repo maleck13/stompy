@@ -16,7 +16,7 @@ type subscription struct {
 	AddedHeaders StompHeaders
 }
 
-func NewSubscription(destination string, handler SubscriptionHandler, headers StompHeaders) (subscription, error) {
+func newSubscription(destination string, handler SubscriptionHandler, headers StompHeaders) (subscription, error) {
 	sub := subscription{}
 	id, err := uuid.NewV4()
 	if nil != err {
@@ -36,7 +36,7 @@ type subscriptions struct {
 	subs map[string]subscription
 }
 
-func NewSubscriptions() *subscriptions {
+func newSubscriptions() *subscriptions {
 	return &subscriptions{subs: make(map[string]subscription)}
 }
 

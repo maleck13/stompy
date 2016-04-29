@@ -55,7 +55,6 @@ func (sr StompSocketReader) readFrame() (Frame, error) {
 		if len(parsed) != 2 {
 			return f, BadFrameError("failed to parse header correctly " + header)
 		}
-		//todo need to decode the headers
 		key := sr.decoder.Decode(parsed[0])
 		val := sr.decoder.Decode(parsed[1])
 		f.Headers[key] = val
@@ -67,7 +66,7 @@ func (sr StompSocketReader) readFrame() (Frame, error) {
 	}
 	if 0 != len(body) {
 		//return all but last 2 bytes which are a nul byte and a \n
-		f.Body = body[0 : len(body) - 2]
+		f.Body = body[0 : len(body)-2]
 	}
 
 	return f, nil

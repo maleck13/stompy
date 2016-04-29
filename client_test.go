@@ -364,7 +364,7 @@ func TestClient_Transaction_Commit(t *testing.T) {
 		assert.NoError(t, err, "did not expect an error transaction Commit")
 		rec = NewReceipt(time.Second * 1)
 		err = client.Commit("transid", StompHeaders{}, rec)
-		assert.NoError(t,err,"did not expect an error commiting transaction")
+		assert.NoError(t, err, "did not expect an error commiting transaction")
 	}
 }
 
@@ -397,8 +397,8 @@ func TestClient_Transaction_Abort(t *testing.T) {
 		rec = NewReceipt(time.Second * 1)
 		err = client.Abort("transid", StompHeaders{}, rec)
 		received = <-rec.Received
-		assert.True(t,received, "expected receipt ")
-		assert.NoError(t,err,"did not expect an error commiting transaction")
+		assert.True(t, received, "expected receipt ")
+		assert.NoError(t, err, "did not expect an error commiting transaction")
 	}
 
 }

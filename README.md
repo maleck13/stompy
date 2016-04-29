@@ -13,7 +13,7 @@ Currently a work in progress. Stomp client for golang
   
 # Usage
   
-## Publish
+#### Example Publish
   
   ```golang
         opts := stompy.ClientOpts{
@@ -38,7 +38,7 @@ Currently a work in progress. Stomp client for golang
 ```     
 
 
-## Publish with receipt
+#### Example Publish with receipt
   
   ```golang
         opts := stompy.ClientOpts{
@@ -67,7 +67,7 @@ Currently a work in progress. Stomp client for golang
 ```     
 
 
-## Subscribe and Unsubscribe
+#### Example Subscribe and Unsubscribe
 
   ```golang
         opts := stompy.ClientOpts{

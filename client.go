@@ -1,3 +1,7 @@
+//Stompy is a stomp client for communicating with stomp based messaging servers.
+//It supports stomp 1.1 and 1.2. It exposes a set of interfaces to allow easy mocking
+// in tests. The main interface is StompClient
+
 package stompy
 
 import (
@@ -9,20 +13,22 @@ import (
 	"time"
 )
 
+//Supported Versions of stomp protocol
 const (
 	STOMP_1_1 string = "1.1"
 	STOMP_1_2 string = "1.2"
 )
 
 var (
-	Supported                = []string{STOMP_1_1, STOMP_1_2}
+	Supported = []string{STOMP_1_1, STOMP_1_2}
+	//A dumb default Disconnect Handler
 	DefaultDisconnectHandler = func(err error) {
 		//hmmm what to do
 		log.Println("defualt disconnect handler: ", err)
 	}
 )
 
-//wraps up various connection and auth params
+//Available connection and auth params
 type ClientOpts struct {
 	Vhost       string
 	HostAndPort string
@@ -58,6 +64,7 @@ type StompPublisher interface {
 	Publish(destination string, contentType string, body []byte, headers StompHeaders, receipt *Receipt) error
 }
 
+//defines how transactions are done
 type StompTransactor interface {
 	Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error
 	Abort(transId string, addedHeaders StompHeaders, receipt *Receipt) error
@@ -100,7 +107,7 @@ type Client struct {
 	headersFactory    headers
 }
 
-//create a new client based on a set of options
+//Create a new stomp client based on a set of options
 func NewClient(opts ClientOpts) StompClient {
 	errChan := make(chan error)
 	shutdown := make(chan bool, 1)
@@ -113,6 +120,7 @@ func NewClient(opts ClientOpts) StompClient {
 		msgChan: msgChan, encoderDecoder: encoderDecoder, headersFactory: headersFactory}
 }
 
+//Begin a transaction with the stomp server
 func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
 	headers := client.headersFactory.transactionHeaders(transId, addedHeaders)
 	headers, err := handleReceipt(headers, receipt)
@@ -126,6 +134,7 @@ func (client *Client) Begin(transId string, addedHeaders StompHeaders, receipt *
 	return nil
 }
 
+//Abort a transaction with the stomp server
 func (client *Client) Abort(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
 	headers := client.headersFactory.transactionHeaders(transId, addedHeaders)
 	headers, err := handleReceipt(headers, receipt)
@@ -139,6 +148,7 @@ func (client *Client) Abort(transId string, addedHeaders StompHeaders, receipt *
 	return nil
 }
 
+//Commit a transaction with the stomp server
 func (client *Client) Commit(transId string, addedHeaders StompHeaders, receipt *Receipt) error {
 	headers := client.headersFactory.transactionHeaders(transId, addedHeaders)
 	headers, err := handleReceipt(headers, receipt)
@@ -152,6 +162,7 @@ func (client *Client) Commit(transId string, addedHeaders StompHeaders, receipt 
 	return nil
 }
 
+//Acknowledge receipt of a message with stomp server
 func (client *Client) Ack(msg Frame) error {
 	if _, ok := msg.Headers["message-id"]; !ok {
 		return ClientError("cannot ack message without message-id header")
@@ -165,6 +176,7 @@ func (client *Client) Ack(msg Frame) error {
 	return writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder)
 }
 
+//Dont acknowledge the message and let the server know so it can decide what to do with it
 func (client *Client) Nack(msg Frame) error {
 	if _, ok := msg.Headers["message-id"]; !ok {
 		return ClientError("cannot ack message without message-id header")
@@ -230,6 +242,99 @@ func (client *Client) Connect() error {
 
 }
 
+//StompConnector.Disconnect close our error channel then close the socket connection
+func (client *Client) Disconnect() error {
+	if nil != client.conn {
+		headers := StompHeaders{}
+		headers["receipt"] = "disconnect"
+		rec := NewReceipt(time.Second * 1)
+		awaitingReceipt.Add("disconnect", rec)
+		frame := NewFrame(_COMMAND_DISCONNECT, headers, _NULLBUFF)
+
+		if err := writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder); err != nil {
+			return err
+		}
+		<-rec.Received
+		//signal read loop to shutdown
+		client.shutdown <- true
+		client.subscriptions = newSubscriptions()
+		close(client.connectionErr)
+		close(client.shutdown)
+		close(client.msgChan)
+		return client.conn.Close()
+	}
+	return nil
+}
+
+//StompConnector.RegisterDisconnectHandler register a handler func that is sent any disconnect errors
+func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
+	client.DisconnectHandler = handler
+	go func(errChan chan error) {
+		//todo could end up with multiple handlers
+		//todo prob dont want to fire this multiple times between disconnects. Likely needs more sophistication
+		for err := range errChan {
+			if _, ok := err.(ConnectionError); ok {
+
+				client.DisconnectHandler(err)
+			}
+		}
+	}(client.connectionErr)
+}
+
+//StompPublisher.Send publish a message to the server
+func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
+
+	headers := client.headersFactory.sendHeaders(destination, contentType, addedHeaders)
+	headers, err := handleReceipt(headers, receipt)
+	if err != nil {
+		return err
+	}
+
+	frame := NewFrame(_COMMAND_SEND, headers, body)
+
+	return writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder)
+}
+
+//subscribe to messages sent to the destination. The SubscriptionHandler will also receive RECEIPTS if a receipt header is set
+//headers are id and ack
+func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders, receipt *Receipt) (string, error) {
+	//create an id
+	//ensure we don't end up with double registration
+	sub, err := newSubscription(destination, handler, headers)
+	if nil != err {
+		return "", err
+	}
+	if err := client.subscriptions.addSubscription(sub); err != nil {
+		return "", err
+	}
+	subHeaders := client.headersFactory.subscribeHeaders(sub.Id, destination, headers)
+	subHeaders, err = handleReceipt(subHeaders, receipt)
+	if err != nil {
+		return "", err
+	}
+	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
+	//todo think about if we have no conn
+	if err := writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder); err != nil {
+		return "", err
+	}
+	return sub.Id, nil
+}
+
+//Unsubscribe takes the id of a subscription and removes that subscriber so it will no longer receive messages
+func (client *Client) Unsubscribe(id string, headers StompHeaders, receipt *Receipt) error {
+	unSub := client.headersFactory.unSubscribeHeaders(id, headers)
+	unSub, err := handleReceipt(unSub, receipt)
+	if err != nil {
+		return err
+	}
+	frame := Frame{_COMMAND_UNSUBSCRIBE, unSub, _NULLBUFF}
+	client.subscriptions.removeSubscription(id)
+	if err := writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder); err != nil {
+		return err
+	}
+	return nil
+}
+
 func versionCheck(f Frame) error {
 	var ok = false
 	version := f.Headers["version"]
@@ -256,45 +361,6 @@ func (client *Client) sendConnectionError(err error) {
 	}
 }
 
-//StompConnector.Disconnect close our error channel then close the socket connection
-func (client *Client) Disconnect() error {
-	if nil != client.conn {
-		headers := StompHeaders{}
-		headers["receipt"] = "disconnect"
-		rec := NewReceipt(time.Second * 1)
-		awaitingReceipt.Add("disconnect", rec)
-		frame := NewFrame(_COMMAND_DISCONNECT, headers, _NULLBUFF)
-
-		if err := writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder); err != nil {
-			return err
-		}
-		<-rec.Received
-		//signal read loop to shutdown
-		client.shutdown <- true
-		client.subscriptions = NewSubscriptions()
-		close(client.connectionErr)
-		close(client.shutdown)
-		close(client.msgChan)
-		return client.conn.Close()
-	}
-	return nil
-}
-
-//StompConnector.RegisterDisconnectHandler register a handler func that is sent any disconnect errors
-func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
-	client.DisconnectHandler = handler
-	go func(errChan chan error) {
-		//todo could end up with multiple handlers
-		//todo prob dont want to fire this multiple times between disconnects. Likely needs more sophistication
-		for err := range errChan {
-			if _, ok := err.(ConnectionError); ok {
-
-				client.DisconnectHandler(err)
-			}
-		}
-	}(client.connectionErr)
-}
-
 func handleReceipt(headers StompHeaders, receipt *Receipt) (StompHeaders, error) {
 	if receiptId, ok := headers["receipt"]; ok && receipt != nil {
 		if err := awaitingReceipt.Add(receiptId, receipt); err != nil {
@@ -307,57 +373,4 @@ func handleReceipt(headers StompHeaders, receipt *Receipt) (StompHeaders, error)
 	}
 
 	return headers, nil
-}
-
-//StompPublisher.Send publish a message to the server
-func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
-
-	headers := client.headersFactory.sendHeaders(destination, contentType, addedHeaders)
-	headers, err := handleReceipt(headers, receipt)
-	if err != nil {
-		return err
-	}
-
-	frame := NewFrame(_COMMAND_SEND, headers, body)
-
-	return writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder)
-}
-
-//subscribe to messages sent to the destination. The SubscriptionHandler will also receive RECEIPTS if a receipt header is set
-//headers are id and ack
-func (client *Client) Subscribe(destination string, handler SubscriptionHandler, headers StompHeaders, receipt *Receipt) (string, error) {
-	//create an id
-	//ensure we don't end up with double registration
-	sub, err := NewSubscription(destination, handler, headers)
-	if nil != err {
-		return "", err
-	}
-	if err := client.subscriptions.addSubscription(sub); err != nil {
-		return "", err
-	}
-	subHeaders := client.headersFactory.subscribeHeaders(sub.Id, destination, headers)
-	subHeaders, err = handleReceipt(subHeaders, receipt)
-	if err != nil {
-		return "", err
-	}
-	frame := Frame{_COMMAND_SUBSCRIBE, subHeaders, _NULLBUFF}
-	//todo think about if we have no conn
-	if err := writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder); err != nil {
-		return "", err
-	}
-	return sub.Id, nil
-}
-
-func (client *Client) Unsubscribe(id string, headers StompHeaders, receipt *Receipt) error {
-	unSub := client.headersFactory.unSubscribeHeaders(id, headers)
-	unSub, err := handleReceipt(unSub, receipt)
-	if err != nil {
-		return err
-	}
-	frame := Frame{_COMMAND_UNSUBSCRIBE, unSub, _NULLBUFF}
-	client.subscriptions.removeSubscription(id)
-	if err := writeFrame(bufio.NewWriter(client.conn), frame, client.encoderDecoder); err != nil {
-		return err
-	}
-	return nil
 }
