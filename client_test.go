@@ -17,6 +17,46 @@ var (
 	INTEGRATION_SERVER = os.Getenv("INTEGRATION_SERVER")
 )
 
+func ExampleClient_Connect() {
+
+	opts := ClientOpts{
+		HostAndPort: "someserver:61613",
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "auser",
+		PassCode:    "supersecret",
+		Version:     "1,1",
+	}
+	client := NewClient(opts)
+	if err := client.Connect(); err != nil{
+		fmt.Errorf("failed to connect %s ",err.Error())
+	}
+	client.Disconnect()
+}
+
+func ExampleClient_Publish() {
+	opts := ClientOpts{
+		HostAndPort: "someserver:61613",
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "auser",
+		PassCode:    "supersecret",
+		Version:     "1,1",
+	}
+	client := NewClient(opts)
+	if err := client.Connect(); err != nil{
+		fmt.Errorf("failed to connect %s ",err.Error())
+	}
+
+	rec := NewReceipt(time.Second * 1)
+	if err := client.Publish("/test/ack", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec); err != nil{
+		fmt.Errorf("failed to publish %s ",err.Error())
+	}
+
+	<- rec.Received
+
+}
+
 func TestClient_Connect_Error(t *testing.T) {
 	var tableOpts = []ClientOpts{
 		GenerateClientOpts("idonetexist:61613", "admin", "admin", "1.1"),
