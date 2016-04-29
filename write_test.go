@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 //implement SocketWriter

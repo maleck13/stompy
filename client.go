@@ -101,7 +101,7 @@ type Client struct {
 	msgChan           chan Frame        // read loop sends new messages on this channel
 	DisconnectHandler DisconnectHandler // a func that should do something in the case of a network disconnection
 	conn              net.Conn
-	reader            StompSocketReader //used to read from the network socket
+	reader            stompSocketReader //used to read from the network socket
 	subscriptions     *subscriptions
 	encoderDecoder    encoderDecoder
 	headersFactory    headers
@@ -208,7 +208,7 @@ func (client *Client) Connect() error {
 	//setup version specific header encoder
 	encoder := headerEncoderDecoder{client.opts.Version}
 
-	client.reader = NewStompReader(conn, client.shutdown, client.connectionErr, client.msgChan, encoder)
+	client.reader = newStompReader(conn, client.shutdown, client.connectionErr, client.msgChan, encoder)
 
 	headers, err := client.headersFactory.connectionHeaders(client.opts)
 	if err != nil {

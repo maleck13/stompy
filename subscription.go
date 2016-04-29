@@ -3,7 +3,7 @@ package stompy
 import (
 	"sync"
 
-	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/nu7hatch/gouuid"
+	"github.com/nu7hatch/gouuid"
 )
 
 //the subscription handler type defines the function signature that should be passed when subscribing to queues

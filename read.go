@@ -6,21 +6,21 @@ import (
 	"strings"
 )
 
-type StompReader interface {
+type stompReader interface {
 	ReadBytes(c byte) ([]byte, error)
 	ReadString(c byte) (string, error)
 }
 
-type StompSocketReader struct {
+type stompSocketReader struct {
 	decoder  decoder
-	reader   StompReader
+	reader   stompReader
 	shutdown chan bool
 	errChan  chan error
 	msgChan  chan Frame // we may be over complicating here
 }
 
-func NewStompReader(con net.Conn, shutdownCh chan bool, errChan chan error, msgChan chan Frame, decoder decoder) StompSocketReader {
-	return StompSocketReader{
+func newStompReader(con net.Conn, shutdownCh chan bool, errChan chan error, msgChan chan Frame, decoder decoder) stompSocketReader {
+	return stompSocketReader{
 		decoder:  decoder,
 		reader:   bufio.NewReader(con),
 		shutdown: shutdownCh,
@@ -30,7 +30,7 @@ func NewStompReader(con net.Conn, shutdownCh chan bool, errChan chan error, msgC
 }
 
 //reads a single frame of the wire
-func (sr StompSocketReader) readFrame() (Frame, error) {
+func (sr stompSocketReader) readFrame() (Frame, error) {
 	f := Frame{}
 
 	line, err := sr.reader.ReadBytes('\n')
@@ -72,7 +72,7 @@ func (sr StompSocketReader) readFrame() (Frame, error) {
 	return f, nil
 }
 
-func (sr StompSocketReader) startReadLoop() {
+func (sr stompSocketReader) startReadLoop() {
 	//read a frame, if it is a subscription send it be handled
 	for {
 		frame, err := sr.readFrame() //this will block until it reads

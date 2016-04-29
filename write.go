@@ -5,13 +5,13 @@ import (
 	"strconv"
 )
 
-type StompWriter interface {
+type stompWriter interface {
 	io.Writer
 	WriteByte(c byte) error
 	Flush() error
 }
 
-func writeFrame(writer StompWriter, frame Frame, encode encoder) error {
+func writeFrame(writer stompWriter, frame Frame, encode encoder) error {
 	//set content length
 	frame.Headers["content-length"] = strconv.Itoa(len(frame.Body))
 	//write our command CONNECT SUBSCRIBE etc to the buffer

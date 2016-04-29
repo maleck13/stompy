@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maleck13/stompy/Godeps/_workspace/src/github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReceipts_Add_Timeout(t *testing.T) {
