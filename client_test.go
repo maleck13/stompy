@@ -28,8 +28,8 @@ func ExampleClient_Connect() {
 		Version:     "1,1",
 	}
 	client := NewClient(opts)
-	if err := client.Connect(); err != nil{
-		fmt.Errorf("failed to connect %s ",err.Error())
+	if err := client.Connect(); err != nil {
+		fmt.Errorf("failed to connect %s ", err.Error())
 	}
 	client.Disconnect()
 }
@@ -44,16 +44,16 @@ func ExampleClient_Publish() {
 		Version:     "1,1",
 	}
 	client := NewClient(opts)
-	if err := client.Connect(); err != nil{
-		fmt.Errorf("failed to connect %s ",err.Error())
+	if err := client.Connect(); err != nil {
+		fmt.Errorf("failed to connect %s ", err.Error())
 	}
 
 	rec := NewReceipt(time.Second * 1)
-	if err := client.Publish("/test/ack", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec); err != nil{
-		fmt.Errorf("failed to publish %s ",err.Error())
+	if err := client.Publish("/test/ack", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec); err != nil {
+		fmt.Errorf("failed to publish %s ", err.Error())
 	}
 
-	<- rec.Received
+	<-rec.Received
 
 }
 
