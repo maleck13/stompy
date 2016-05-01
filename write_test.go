@@ -3,7 +3,6 @@ package stompy
 import (
 	"errors"
 	"testing"
-
 	"github.com/stretchr/testify/assert"
 )
 

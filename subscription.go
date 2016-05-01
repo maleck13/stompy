@@ -44,9 +44,6 @@ func (s *subscriptions) dispatch(incoming chan Frame) {
 
 	var forward = func(f Frame) {
 		id := f.Headers["subscription"]
-		if "" == id {
-			//err
-		}
 		if sub, ok := s.subs[id]; ok {
 			go sub.Handler(f)
 		}

@@ -59,7 +59,7 @@ func (sr stompSocketReader) readFrame() (Frame, error) {
 		val := sr.decoder.Decode(parsed[1])
 		f.Headers[key] = val
 	}
-	//ready body
+	//read body
 	body, err := sr.reader.ReadBytes('\n')
 	if err != nil {
 		return f, err

@@ -435,7 +435,7 @@ func TestClient_Transaction_Abort(t *testing.T) {
 		err = client.Publish("/test/trans2", "application/json", []byte(`{"test":"test"}`), headers, nil)
 		assert.NoError(t, err, "did not expect an error transaction Commit")
 		rec = NewReceipt(time.Second * 1)
-		err = client.Abort("transid", StompHeaders{}, rec)
+		err = client.Abort("transid2", StompHeaders{}, rec)
 		received = <-rec.Received
 		assert.True(t, received, "expected receipt ")
 		assert.NoError(t, err, "did not expect an error commiting transaction")
