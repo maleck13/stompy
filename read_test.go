@@ -4,41 +4,20 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"bufio"
+	"strings"
 )
-
-type MockStompReader struct {
-	readBytes  int
-	readString int
-}
-
-func (mr *MockStompReader) ReadBytes(c byte) ([]byte, error) {
-	var cmd = []byte("MESSAGE\n")
-	var body = []byte(`{"test":"test"}`)
-	var frame = make([][]byte, 0)
-	frame = append(frame, cmd, body)
-	data := frame[mr.readBytes]
-	mr.readBytes++
-	return data, nil
-}
-
-func (mr *MockStompReader) ReadString(c byte) (string, error) {
-	if mr.readString == 0 {
-		mr.readString++
-		return "test:test\n", nil
-	} else {
-		return "\n", nil
-	}
-}
 
 //this test is a bit fragile. Look at improving
 func TestReadFrameOK(t *testing.T) {
-
+	r := strings.NewReader("MESSAGE\ntest:test\n\n{\"test\":\"test\"}\n")
+	reader := bufio.NewReader(r)
 	shutdown := make(chan bool)
 	errChan := make(chan error)
 	msgChan := make(chan Frame)
 	socketReader := stompSocketReader{
 		decoder:  headerEncoderDecoder{},
-		reader:   &MockStompReader{},
+		reader:   reader,
 		shutdown: shutdown,
 		errChan:  errChan,
 		msgChan:  msgChan,
@@ -57,5 +36,20 @@ func TestReadFrameOK(t *testing.T) {
 }
 
 func TestReadFrameError(t *testing.T) {
+	r := strings.NewReader("MESSAGE\ntesttest\n\n{\"test\":\"test\"}\n")
+	reader := bufio.NewReader(r)
+	shutdown := make(chan bool)
+	errChan := make(chan error)
+	msgChan := make(chan Frame)
+	socketReader := stompSocketReader{
+		decoder:  headerEncoderDecoder{},
+		reader:   reader,
+		shutdown: shutdown,
+		errChan:  errChan,
+		msgChan:  msgChan,
+	}
 
+	frame, err := socketReader.readFrame()
+	assert.Error(t, err, "expected an error reading")
+	assert.NotNil(t,frame," expected a frame")
 }
