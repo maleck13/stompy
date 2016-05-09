@@ -72,16 +72,17 @@ func ExampleClient_Subscribe() {
 	if err := client.Connect(); err != nil {
 		fmt.Errorf("failed to connect %s ", err.Error())
 	}
-	sendHeaders := StompHeaders{}
-	sendHeaders["content-type"] = "application/json"
 
 	subRec := NewReceipt(time.Second * 1)
+	//subscribe and wait for a receipt from the server
 	client.Subscribe("/test/test",func (msg Frame){
 		fmt.Println("recieved message ", string(msg.Body))
 	},StompHeaders{},subRec)
 
 	<-subRec.Received
-
+	//send a message that should be received by the subscription
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
 	rec := NewReceipt(time.Second * 1)
 	if err := client.Publish("/test/test", []byte(`{"test":"test"}`), sendHeaders, rec); err != nil {
 		fmt.Errorf("failed to publish %s ", err.Error())
