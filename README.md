@@ -1,7 +1,7 @@
 # Stompy A golang stomp client. Supports stomp vers 1.1 and 1.2
 
 
-Currently a work in progress. Stomp client for golang
+Golang Stomp client.
 
 ## Installing
 
@@ -29,7 +29,9 @@ Currently a work in progress. Stomp client for golang
         if err != nil{
           fmt.Fatal(err)
         }
-        err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, nil)
+        sendHeaders := stompy.StompHeaders{}
+        sendHeaders["content-type"] = "application/json"
+        err = client.Publish("/test/test", []byte(`{"test":"test"}`), sendHeaders, nil)
         if err != nil{
             fmt.Fatal(err)
         }
@@ -55,7 +57,9 @@ Currently a work in progress. Stomp client for golang
           fmt.Fatal(err)
         }
         rec := stompy.NewReceipt(time.Second * 1) //timeout after waiting for longer than a second for a receipt 
-        err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
+        sendHeaders := stompy.StompHeaders{}
+        sendHeaders["content-type"] = "application/json"
+        err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), sendHeaders, rec)
         if err != nil{
             fmt.Fatal(err)
         }
