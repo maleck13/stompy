@@ -47,9 +47,11 @@ func ExampleClient_Publish() {
 	if err := client.Connect(); err != nil {
 		fmt.Errorf("failed to connect %s ", err.Error())
 	}
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
 
 	rec := NewReceipt(time.Second * 1)
-	if err := client.Publish("/test/ack", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec); err != nil {
+	if err := client.Publish("/test/ack", []byte(`{"test":"test"}`), sendHeaders, rec); err != nil {
 		fmt.Errorf("failed to publish %s ", err.Error())
 	}
 
@@ -139,13 +141,15 @@ func TestClient_PublishBasicSend(t *testing.T) {
 		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.1"),
 		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.2"),
 	}
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
 	for _, opts := range tableOpts {
 		fmt.Println("testing version ", opts.Version)
 		client := NewClient(opts)
 		err := client.Connect()
 		assert.NoError(t, err, "did not expect a connection error ")
 		rec := NewReceipt(time.Second * 1)
-		err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
+		err = client.Publish("/test/test", []byte(`{"test":"test"}`), sendHeaders, rec)
 		assert.NoError(t, err, "did not expect a connection error ")
 		received := <-rec.Received
 		assert.True(t, received, "expected to receive a receipt after send")
@@ -161,6 +165,10 @@ func TestClient_Subscribe(t *testing.T) {
 		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.1"),
 		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.2"),
 	}
+
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
+
 	for _, opts := range tableOpts {
 		fmt.Println("testing version ", opts.Version)
 		client := NewClient(opts)
@@ -176,7 +184,7 @@ func TestClient_Subscribe(t *testing.T) {
 		for i := 0; i < 20; i++ {
 			wait.Add(1)
 			str := fmt.Sprintf("test %d ", i)
-			err = client.Publish("/test/testsub", "application/json", []byte(`{"test":"`+str+`"}`), StompHeaders{}, nil)
+			err = client.Publish("/test/testsub", []byte(`{"test":"`+str+`"}`), sendHeaders, nil)
 		}
 		wait.Wait()
 		client.Disconnect()
@@ -214,6 +222,8 @@ func TestClient_PublishWithReceipt(t *testing.T) {
 		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.1"),
 		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.2"),
 	}
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
 	for _, opts := range tableOpts {
 		fmt.Println("testing version ", opts.Version)
 		client := NewClient(opts)
@@ -224,7 +234,7 @@ func TestClient_PublishWithReceipt(t *testing.T) {
 			go func() {
 				wait.Add(1)
 				rec := NewReceipt(time.Second * 1)
-				err = client.Publish("/test/test", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
+				err = client.Publish("/test/test", []byte(`{"test":"test"}`), StompHeaders{}, rec)
 				assert.NoError(t, err, "did not expect an error publishing ")
 				received := <-rec.Received
 				assert.True(t, received, "expected a receipt")
@@ -286,14 +296,16 @@ func TestClient_UnSubscribe(t *testing.T) {
 		assert.NoError(t, err, "did not expect an error subscribing")
 		assert.NotEqual(t, "", id, "expected a subscription id")
 		wait.Add(1)
-		err = client.Publish("/test/unsub", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, nil)
+		sendHeaders := StompHeaders{}
+		sendHeaders["content-type"] = "application/json"
+		err = client.Publish("/test/unsub", []byte(`{"test":"test"}`), sendHeaders, nil)
 		assert.NoError(t, err, "did not expect error publishing")
 		wait.Wait()
 		receipt := NewReceipt(time.Millisecond * 100)
 		err = client.Unsubscribe(id, StompHeaders{}, receipt)
 		<-receipt.Received
 		assert.NoError(t, err, "did not expect error unsub")
-		err = client.Publish("/test/unsub", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, nil)
+		err = client.Publish("/test/unsub", []byte(`{"test":"test"}`), sendHeaders, nil)
 		time.Sleep(time.Millisecond * 100)
 	}
 }
@@ -321,7 +333,8 @@ func TestClient_Publish_Client_Ack_client(t *testing.T) {
 		id, err := client.Subscribe("/test/ack", func(f Frame) {
 			wait.Done()
 		}, headers, nil)
-		err = client.Publish("/test/ack", "application/json", []byte(`{"test":"test"}`), StompHeaders{}, rec)
+		sendHeaders := StompHeaders{"content-type": "application/json"}
+		err = client.Publish("/test/ack", []byte(`{"test":"test"}`), sendHeaders, rec)
 		assert.NoError(t, err, "did not expect an error publishing ")
 		<-rec.Received
 		wait.Wait()
@@ -368,7 +381,8 @@ func TestClient_Publish_Client_Ack_client_individual(t *testing.T) {
 		}, headers, nil)
 
 		sendHeaders := StompHeaders{}
-		err = client.Publish("/test/ack2", "application/json", []byte(`{"test":"test"}`), sendHeaders, nil)
+		sendHeaders["content-type"] = "application/json"
+		err = client.Publish("/test/ack2", []byte(`{"test":"test"}`), sendHeaders, nil)
 		assert.NoError(t, err, "did not expect an error publishing ")
 		wait.Wait()
 		err = client.Disconnect()
@@ -400,7 +414,8 @@ func TestClient_Transaction_Commit(t *testing.T) {
 		assert.True(t, received, "expected received receipt")
 		headers := StompHeaders{}
 		headers["transaction"] = "transid"
-		err = client.Publish("/test/trans", "application/json", []byte(`{"test":"test"}`), headers, nil)
+		headers["content-type"] = "application/json"
+		err = client.Publish("/test/trans", []byte(`{"test":"test"}`), headers, nil)
 		assert.NoError(t, err, "did not expect an error transaction Commit")
 		rec = NewReceipt(time.Second * 1)
 		err = client.Commit("transid", StompHeaders{}, rec)
@@ -432,7 +447,8 @@ func TestClient_Transaction_Abort(t *testing.T) {
 		assert.True(t, received, "expected received receipt")
 		headers := StompHeaders{}
 		headers["transaction"] = "transid2"
-		err = client.Publish("/test/trans2", "application/json", []byte(`{"test":"test"}`), headers, nil)
+		headers["content-type"] = "application/json"
+		err = client.Publish("/test/trans2", []byte(`{"test":"test"}`), headers, nil)
 		assert.NoError(t, err, "did not expect an error transaction Commit")
 		rec = NewReceipt(time.Second * 1)
 		err = client.Abort("transid2", StompHeaders{}, rec)

@@ -86,9 +86,8 @@ func (h headers) connectionHeaders(opts ClientOpts) (StompHeaders, error) {
 	return headers, nil
 }
 
-func (h headers) sendHeaders(dest, contentType string, addedHeaders StompHeaders) StompHeaders {
+func (h headers) sendHeaders(dest string, addedHeaders StompHeaders) StompHeaders {
 	headers := StompHeaders{}
-	headers["content-type"] = contentType
 	headers["destination"] = dest
 	if nil == addedHeaders {
 		return headers

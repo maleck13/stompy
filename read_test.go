@@ -3,9 +3,10 @@ package stompy
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"bufio"
 	"strings"
+
+	"github.com/stretchr/testify/assert"
 )
 
 //this test is a bit fragile. Look at improving
@@ -51,5 +52,5 @@ func TestReadFrameError(t *testing.T) {
 
 	frame, err := socketReader.readFrame()
 	assert.Error(t, err, "expected an error reading")
-	assert.NotNil(t,frame," expected a frame")
+	assert.NotNil(t, frame, " expected a frame")
 }

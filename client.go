@@ -60,8 +60,8 @@ type StompSubscriber interface {
 
 //responsible for defining how a publish should happen
 type StompPublisher interface {
-	//accepts a body, destination, content-type and any headers you wish to override or set
-	Publish(destination string, contentType string, body []byte, headers StompHeaders, receipt *Receipt) error
+	//accepts a body, destination,  any headers you wish to override or set such as content-type
+	Publish(destination string, body []byte, headers StompHeaders, receipt *Receipt) error
 }
 
 //defines how transactions are done
@@ -282,9 +282,9 @@ func (client *Client) RegisterDisconnectHandler(handler DisconnectHandler) {
 }
 
 //StompPublisher.Send publish a message to the server
-func (client *Client) Publish(destination, contentType string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
+func (client *Client) Publish(destination string, body []byte, addedHeaders StompHeaders, receipt *Receipt) error {
 
-	headers := client.headersFactory.sendHeaders(destination, contentType, addedHeaders)
+	headers := client.headersFactory.sendHeaders(destination, addedHeaders)
 	headers, err := handleReceipt(headers, receipt)
 	if err != nil {
 		return err
