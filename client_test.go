@@ -59,6 +59,37 @@ func ExampleClient_Publish() {
 
 }
 
+func ExampleClient_Subscribe() {
+	opts := ClientOpts{
+		HostAndPort: "someserver:61613",
+		Timeout:     20 * time.Second,
+		Vhost:       "localhost",
+		User:        "auser",
+		PassCode:    "supersecret",
+		Version:     "1,1",
+	}
+	client := NewClient(opts)
+	if err := client.Connect(); err != nil {
+		fmt.Errorf("failed to connect %s ", err.Error())
+	}
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
+
+	subRec := NewReceipt(time.Second * 1)
+	client.Subscribe("/test/test",func (msg Frame){
+		fmt.Println("recieved message ", string(msg.Body))
+	},StompHeaders{},subRec)
+
+	<-subRec.Received
+
+	rec := NewReceipt(time.Second * 1)
+	if err := client.Publish("/test/test", []byte(`{"test":"test"}`), sendHeaders, rec); err != nil {
+		fmt.Errorf("failed to publish %s ", err.Error())
+	}
+
+	<-rec.Received
+}
+
 func TestClient_Connect_Error(t *testing.T) {
 	var tableOpts = []ClientOpts{
 		GenerateClientOpts("idonetexist:61613", "admin", "admin", "1.1"),
