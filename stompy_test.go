@@ -277,6 +277,82 @@ func TestClient_PublishWithReceipt(t *testing.T) {
 	}
 }
 
+func TestClient_SubscribeWithWildCard(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
+	var tableOpts = []ClientOpts{
+		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.1"),
+		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.2"),
+	}
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
+	for _, opts := range tableOpts {
+		wait := &sync.WaitGroup{}
+		fmt.Println("testing version ", opts.Version)
+		client := NewClient(opts)
+		err := client.Connect()
+		rec := NewReceipt(time.Second * 1)
+		assert.NoError(t, err, "did not expect a connection error ")
+		s1, err := client.Subscribe("/topic/some.>", func(f Frame) {
+			fmt.Println("recieved0 ", string(f.Body))
+			wait.Done()
+		}, StompHeaders{}, rec)
+		<-rec.receiptReceived
+		rec2 := NewReceipt(time.Second * 1)
+		s2, err := client.Subscribe("/topic/some.>", func(f Frame) {
+			fmt.Println("recieved1 ", string(f.Body))
+			wait.Done()
+		}, StompHeaders{}, rec2)
+		<-rec2.receiptReceived
+
+		wait.Add(2)
+		err = client.Publish("/topic/some.test.topic", []byte(`{"test":"test"}`), StompHeaders{}, nil)
+		assert.NoError(t, err, "did not expect an error publishing ")
+		wait.Wait()
+		client.Unsubscribe(s1,StompHeaders{},nil)
+		client.Unsubscribe(s2,StompHeaders{},nil)
+	}
+}
+
+func TestClient_SubscribeWithWildCardAstrix(t *testing.T) {
+	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
+		t.Skip("INTEGRATION DISABLED")
+	}
+	var tableOpts = []ClientOpts{
+		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.1"),
+		GenerateClientOpts(INTEGRATION_SERVER, "admin", "admin", "1.2"),
+	}
+	sendHeaders := StompHeaders{}
+	sendHeaders["content-type"] = "application/json"
+	for _, opts := range tableOpts {
+		wait := &sync.WaitGroup{}
+		fmt.Println("testing version ", opts.Version)
+		client := NewClient(opts)
+		err := client.Connect()
+		rec := NewReceipt(time.Second * 1)
+		assert.NoError(t, err, "did not expect a connection error ")
+		s1, err := client.Subscribe("/topic/some.test.*", func(f Frame) {
+			fmt.Println("recieved0 ", string(f.Body))
+			wait.Done()
+		}, StompHeaders{}, rec)
+		<-rec.receiptReceived
+		rec2 := NewReceipt(time.Second * 1)
+		s2, err := client.Subscribe("/topic/some.test.*", func(f Frame) {
+			fmt.Println("recieved1 ", string(f.Body))
+			wait.Done()
+		}, StompHeaders{}, rec2)
+		<-rec2.receiptReceived
+
+		wait.Add(2)
+		err = client.Publish("/topic/some.test.topic", []byte(`{"test":"test"}`), StompHeaders{}, nil)
+		assert.NoError(t, err, "did not expect an error publishing ")
+		wait.Wait()
+		client.Unsubscribe(s1,StompHeaders{},nil)
+		client.Unsubscribe(s2,StompHeaders{},nil)
+	}
+}
+
 func TestClient_Disconnect(t *testing.T) {
 	if "" != SKIP_INTEGRATION || "" == INTEGRATION_SERVER {
 		t.Skip("INTEGRATION DISABLED")
